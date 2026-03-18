@@ -3,7 +3,7 @@
 ## Todo List
 
 ```typescript
-import { weave } from 'weave';
+import { weave } from '@ludoows/weave';
 
 interface Todo {
   id: number;
@@ -168,7 +168,7 @@ weave('#user-profile', ({ $, ref, promise }) => {
 ## Shopping Cart with Store
 
 ```typescript
-import { createStore, weave } from 'weave';
+import { createStore, weave } from '@ludoows/weave';
 
 interface CartItem {
   id: number;

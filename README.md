@@ -15,8 +15,24 @@ A modern TypeScript reactive library that makes any existing HTML reactive witho
 
 ## Installation
 
+### npm / yarn
+
 ```bash
 npm install @ludoows/weave
+```
+
+```bash
+yarn add @ludoows/weave
+```
+
+### CDN
+
+```html
+<!-- unpkg -->
+<script src="https://unpkg.com/@ludoows/weave"></script>
+
+<!-- jsDelivr -->
+<script src="https://cdn.jsdelivr.net/npm/@ludoows/weave"></script>
 ```
 
 ## Quick Start

@@ -9,13 +9,13 @@ export default {
       file: 'dist/umd/weave.js',
       format: 'umd',
       name: 'Weave',
-      sourcemap: true
+      sourcemap: false
     },
     {
       file: 'dist/umd/weave.min.js',
       format: 'umd',
       name: 'Weave',
-      sourcemap: true,
+      sourcemap: false,
       plugins: [terser()]
     }
   ],

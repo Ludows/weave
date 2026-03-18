@@ -2,16 +2,41 @@
 
 ## Installation
 
-Install Weave via npm:
+### npm / yarn
 
 ```bash
-npm install weave
+npm install @ludoows/weave
 ```
 
-Or with yarn:
-
 ```bash
-yarn add weave
+yarn add @ludoows/weave
+```
+
+### CDN
+
+Utilisable directement dans le navigateur sans bundler :
+
+```html
+<!-- unpkg -->
+<script src="https://unpkg.com/@ludoows/weave"></script>
+
+<!-- jsDelivr -->
+<script src="https://cdn.jsdelivr.net/npm/@ludoows/weave"></script>
+```
+
+Le package est exposé en global sous `window.Weave` :
+
+```html
+<script src="https://unpkg.com/@ludoows/weave"></script>
+<script>
+  const { weave } = Weave;
+
+  weave('#app', ({ $, ref }) => {
+    const count = ref(0);
+    $('#counter').text(() => count.value);
+    $('#increment').on('click', () => count.value++);
+  });
+</script>
 ```
 
 ## Your First Weave Application
