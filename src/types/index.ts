@@ -25,6 +25,9 @@ export interface CallbackContext<S = unknown> {
   memo: <T>(fn: () => T) => () => T;
   has: (key: string, value?: unknown) => boolean;
   sync: (options: SyncOptions) => void;
+  nextTick: (fn?: () => void) => Promise<void>;
+  dispatch: (eventName: string, data?: unknown) => void;
+  $refs: () => Record<string, Element>;
   onInit: (fn: (state: Snapshot<S>) => void | Promise<void>) => void;
   onUpdate: (fn: (newState: Snapshot<S>, oldState: Snapshot<S>) => void) => void;
   onDestroy: (fn: (state: Snapshot<S>) => void) => void;
@@ -69,6 +72,8 @@ export interface NodeRef {
   template: (config: TemplateConfig) => NodeRef;
   has: (attribute: string, value?: unknown) => boolean;
   when: (condition: () => boolean, callback: (element: Element) => void) => NodeRef;
+  model: (ref: Ref<any>) => NodeRef;
+  teleport: (target: string | Element) => NodeRef;
 }
 
 export interface IfOptions {

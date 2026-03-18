@@ -3,6 +3,8 @@
  */
 
 import { createHeadManager, type HeadConfig } from '../advanced/head';
+import { initCloak } from '../dom/cloak';
+import { nextTick as nextTickFn } from '../utils/next-tick';
 import { promise as promiseFn, promiseWithWatch } from '../advanced/promise';
 import { createSyncManager, type SyncOptions } from '../advanced/sync';
 import { createEventDelegator, type EventHandler, type Unlisten } from '../dom/event-delegation';
@@ -144,14 +146,17 @@ function createInstance<S = any>(
     const initialSnapshot = getStateSnapshot<S>(proxyTarget, instanceState);
     instanceState.initialState = initialSnapshot;
     instanceState.previousState = initialSnapshot;
-    
+
     // Execute onInit hooks
     for (const hook of instanceState.lifecycleHooks.onInit) {
       await hook(initialSnapshot);
     }
-    
+
     // Mark as initialized AFTER onInit hooks complete
     instanceState.isInitialized = true;
+
+    // Remove [weave-cloak] attributes now that the instance is ready
+    initCloak(element);
   });
   
   return proxy;
@@ -296,6 +301,25 @@ function createCallbackContext<S = any>(
     },
     cleanup: (fn: () => void) => {
       instanceState.cleanupFns.push(fn);
+    },
+    nextTick: (fn?: () => void) => {
+      return nextTickFn(fn);
+    },
+    dispatch: (eventName: string, data?: unknown) => {
+      const event = new CustomEvent(eventName, {
+        detail: data,
+        bubbles: true,
+        cancelable: true
+      });
+      proxyTarget._el?.dispatchEvent(event);
+    },
+    $refs: () => {
+      const refsMap: Record<string, Element> = {};
+      proxyTarget._el?.querySelectorAll('[weave-ref]').forEach(el => {
+        const name = el.getAttribute('weave-ref');
+        if (name) refsMap[name] = el;
+      });
+      return refsMap;
     },
     macro: (name: string, fn: ContextMacroFn) => {
       // Get or create local registry for this instance

@@ -14,7 +14,7 @@ yarn add @ludoows/weave
 
 ### CDN
 
-Utilisable directement dans le navigateur sans bundler :
+Use directly in the browser without a bundler:
 
 ```html
 <!-- unpkg -->
@@ -65,7 +65,7 @@ Le package est exposé en global sous `window.Weave` :
 ### 2. Create TypeScript
 
 ```typescript
-import { weave } from 'weave';
+import { weave } from '@ludoows/weave';
 
 weave('#app', ({ $, ref }) => {
   // Create reactive state
@@ -209,9 +209,114 @@ cleanup(() => {
 });
 ```
 
+### model() — Two-way binding
+
+Automatically syncs an `<input>`, `<textarea>` or `<select>` with a ref in both directions:
+
+```typescript
+weave('#app', ({ $, ref }) => {
+  const username = ref('');
+
+  // username.value ↔ input.value en temps réel
+  $('#username').model(username);
+
+  $('#greeting').text(() => `Hello, ${username.value}!`);
+});
+```
+
+### teleport() — Move an element
+
+Moves an element to a different DOM target (useful for modals, tooltips):
+
+```typescript
+weave('#app', ({ $ }) => {
+  // Déplace #modal-content dans <body>
+  $('#modal-content').teleport('body');
+});
+```
+A comment placeholder is inserted at the original position and the element is automatically restored on cleanup.
+
+### dispatch() — Emit events
+
+Dispatches a `CustomEvent` that bubbles up from the component root:
+
+```typescript
+weave('#checkout-btn', ({ dispatch }) => {
+  $('#checkout-btn').on('click', () => {
+    dispatch('cart:checkout', { items: [] });
+  });
+});
+
+// Dans un autre composant :
+document.addEventListener('cart:checkout', (e) => {
+  console.log((e as CustomEvent).detail);
+});
+```
+
+### $refs() — Direct element access
+
+Access DOM elements marked with `weave-ref` without CSS selectors:
+
+```html
+<form id="app">
+  <input weave-ref="email" type="email" />
+  <button weave-ref="submit">Send</button>
+</form>
+```
+
+```typescript
+weave('#app', ({ $refs }) => {
+  const { email, submit } = $refs();
+
+  submit.addEventListener('click', () => {
+    console.log((email as HTMLInputElement).value);
+  });
+});
+```
+
+### nextTick() — Wait for the next cycle
+
+Useful for reading DOM state after a reactive update:
+
+```typescript
+weave('#app', ({ $, ref, nextTick }) => {
+  const items = ref<string[]>([]);
+
+  $('#add').on('click', async () => {
+    items.value = [...items.value, 'New item'];
+    await nextTick();
+    // Le DOM est maintenant à jour
+    console.log($('#list').value);
+  });
+});
+```
+
+### [weave-cloak] — Hide before initialization
+
+Prevents a flash of un-initialized content. Weave automatically removes the `weave-cloak` attribute after `onInit`.
+
+```html
+<!-- Required CSS (add once in your stylesheet) -->
+<style>
+  [weave-cloak] { display: none !important; }
+</style>
+
+<div id="app" weave-cloak>
+  <!-- Hidden until Weave is ready -->
+  <span id="counter">0</span>
+</div>
+```
+
+```typescript
+weave('#app', ({ $, ref }) => {
+  const count = ref(0);
+  $('#counter').text(() => count.value);
+  // weave-cloak is removed automatically after onInit
+});
+```
+
 ## Next Steps
 
-- Learn about [NodeRef & Directives](./noderef-directives.md)
 - Explore [Reactive State](./reactive-state.md) in depth
 - Set up [Store System](./store.md) for global state
 - Check out [Examples](./examples.md) for common patterns

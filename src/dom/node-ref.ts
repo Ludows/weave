@@ -3,7 +3,7 @@
  */
 
 import { cleanupEffect, createReactiveEffect, runEffect } from '../core/dependency-tracker';
-import type { ForContext, NodeRef as INodeRef, IfOptions, TemplateConfig } from '../types';
+import type { ForContext, NodeRef as INodeRef, IfOptions, Ref, TemplateConfig } from '../types';
 import { cleanupDirectives, createDirective, registerDirective, type Directive } from './directives';
 
 /**
@@ -650,7 +650,7 @@ export class NodeRef implements INodeRef {
       };
       
       const directive: Directive = {
-        type: 'if', // Using 'if' as placeholder since 'for' is not in DirectiveType yet
+        type: 'for',
         element: container,
         value: items,
         update,
@@ -675,7 +675,7 @@ export class NodeRef implements INodeRef {
       };
       
       const directive: Directive = {
-        type: 'if', // Using 'if' as placeholder
+        type: 'for',
         element: container,
         value: items,
         update: () => {},
@@ -792,6 +792,98 @@ export class NodeRef implements INodeRef {
       renderTemplate();
     }
     
+    return this;
+  }
+
+  /**
+   * Two-way binding between an input/textarea/select and a Ref.
+   * State → DOM: updates the input value when the ref changes.
+   * DOM → State: updates the ref when the user types.
+   */
+  model(refObj: Ref<any>): NodeRef {
+    const element = this.resolve();
+
+    if (
+      !(element instanceof HTMLInputElement) &&
+      !(element instanceof HTMLTextAreaElement) &&
+      !(element instanceof HTMLSelectElement)
+    ) {
+      throw new Error('model() can only be used on input, textarea, or select elements');
+    }
+
+    const inputEl = element as HTMLInputElement;
+
+    // Set initial DOM value from ref
+    inputEl.value = String(refObj.value);
+
+    // DOM → State
+    const inputHandler = () => {
+      refObj.value = inputEl.value;
+    };
+    element.addEventListener('input', inputHandler);
+    element.addEventListener('change', inputHandler);
+
+    // State → DOM (reactive)
+    const update = () => {
+      const val = String(refObj.value);
+      if (inputEl.value !== val) {
+        inputEl.value = val;
+      }
+    };
+
+    const effect = createReactiveEffect(update);
+    runEffect(effect);
+
+    registerDirective(element, {
+      type: 'model',
+      element,
+      value: () => refObj.value,
+      update,
+      cleanup: () => {
+        cleanupEffect(effect);
+        element.removeEventListener('input', inputHandler);
+        element.removeEventListener('change', inputHandler);
+      },
+      effect
+    });
+
+    return this;
+  }
+
+  /**
+   * Move this element into a different DOM target.
+   * A comment placeholder is left in the original position and
+   * the element is restored there on cleanup.
+   */
+  teleport(target: string | Element): NodeRef {
+    const element = this.resolve();
+    const parent = element.parentElement;
+
+    const placeholder = document.createComment('teleport-placeholder');
+    if (parent) {
+      parent.insertBefore(placeholder, element);
+    }
+
+    const targetEl = typeof target === 'string' ? document.querySelector(target) : target;
+    if (!targetEl) {
+      throw new Error(`teleport(): target not found (${target})`);
+    }
+
+    targetEl.appendChild(element);
+
+    registerDirective(element, {
+      type: 'teleport',
+      element,
+      value: target,
+      update: () => {},
+      cleanup: () => {
+        if (placeholder.parentNode) {
+          placeholder.parentNode.insertBefore(element, placeholder);
+          placeholder.remove();
+        }
+      }
+    });
+
     return this;
   }
 

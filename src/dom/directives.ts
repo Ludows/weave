@@ -22,7 +22,10 @@ export type DirectiveType =
   | 'blur'
   | 'scroll'
   | 'template'
-  | 'when';
+  | 'when'
+  | 'for'
+  | 'teleport'
+  | 'model';
 
 /**
  * Represents a directive binding

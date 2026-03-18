@@ -62,13 +62,18 @@ weave('#todo-app', ({ $, ref, computed }) => {
 });
 ```
 
-## Form Validation
+## Form Validation with model()
 
 ```typescript
 weave('#signup-form', ({ $, ref, computed }) => {
   const email = ref('');
   const password = ref('');
   const confirmPassword = ref('');
+
+  // Two-way binding — no need to manually handle input events
+  $('#email').model(email);
+  $('#password').model(password);
+  $('#confirm-password').model(confirmPassword);
   
   computed('isEmailValid', () => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -86,19 +91,6 @@ weave('#signup-form', ({ $, ref, computed }) => {
     instance.isPasswordValid &&
     instance.doPasswordsMatch
   );
-  
-  // Bind inputs
-  $('#email').on('input', (e) => {
-    email.value = (e.target as HTMLInputElement).value;
-  });
-  
-  $('#password').on('input', (e) => {
-    password.value = (e.target as HTMLInputElement).value;
-  });
-  
-  $('#confirm-password').on('input', (e) => {
-    confirmPassword.value = (e.target as HTMLInputElement).value;
-  });
   
   // Show validation messages
   $('#email-error').show(() => email.value && !instance.isEmailValid);
@@ -280,39 +272,103 @@ weave('#cart', ({ $, store }) => {
 });
 ```
 
-## Modal Dialog
+## Modal Dialog with teleport() and dispatch()
+
+```html
+<div id="app">
+  <button id="open-modal-btn">Open Modal</button>
+
+  <!-- The modal will be teleported into <body> to avoid z-index issues -->
+  <div id="modal" style="display:none">
+    <div id="modal-overlay"></div>
+    <div id="modal-box">
+      <h2 id="modal-title"></h2>
+      <p id="modal-content"></p>
+      <button id="close-modal">Close</button>
+    </div>
+  </div>
+</div>
+```
 
 ```typescript
-weave('#modal', ({ $, ref }) => {
+weave('#app', ({ $, ref, dispatch }) => {
   const isOpen = ref(false);
   const title = ref('');
   const content = ref('');
-  
+
+  // Teleport the modal into <body> for correct z-index stacking
+  $('#modal').teleport('body');
+
   // Show/hide modal
   $('#modal').show(() => isOpen.value);
-  
-  // Set content
+
+  // Content
   $('#modal-title').text(() => title.value);
   $('#modal-content').text(() => content.value);
-  
+
   // Close handlers
-  $('#close-modal').on('click', () => isOpen.value = false);
-  $('#modal-overlay').on('click', () => isOpen.value = false);
-  
-  // Prevent closing when clicking modal content
-  $('#modal-content').on('click', (e) => e.stopPropagation());
-  
-  // Expose API
-  window.openModal = (t: string, c: string) => {
-    title.value = t;
-    content.value = c;
+  $('#close-modal').on('click', () => {
+    isOpen.value = false;
+    dispatch('modal:closed');
+  });
+  $('#modal-overlay').on('click', () => { isOpen.value = false; });
+
+  // Listen for the open event
+  document.addEventListener('modal:open', (e) => {
+    const { titleText, bodyText } = (e as CustomEvent).detail;
+    title.value = titleText;
+    content.value = bodyText;
     isOpen.value = true;
-  };
+  });
 });
 
-// Usage from other components
-$('#open-modal-btn').on('click', () => {
-  window.openModal('Hello', 'This is modal content');
+// Depuis n'importe où dans la page :
+document.dispatchEvent(new CustomEvent('modal:open', {
+  detail: { titleText: 'Hello', bodyText: 'This is modal content' }
+}));
+```
+
+## Direct element access with $refs()
+
+```html
+<form id="login-form" weave-cloak>
+  <input weave-ref="email" type="email" placeholder="Email" />
+  <input weave-ref="password" type="password" placeholder="Password" />
+  <button weave-ref="submit" type="submit">Login</button>
+  <p weave-ref="error" style="display:none; color:red"></p>
+</form>
+```
+
+```typescript
+weave('#login-form', ({ $refs, ref, nextTick }) => {
+  const isLoading = ref(false);
+
+  const { email, password, submit, error } = $refs();
+
+  (submit as HTMLButtonElement).addEventListener('click', async (e) => {
+    e.preventDefault();
+    isLoading.value = true;
+    (submit as HTMLButtonElement).disabled = true;
+
+    try {
+      await loginApi({
+        email: (email as HTMLInputElement).value,
+        password: (password as HTMLInputElement).value,
+      });
+      window.location.href = '/dashboard';
+    } catch (err) {
+      (error as HTMLElement).textContent = (err as Error).message;
+      (error as HTMLElement).style.display = 'block';
+
+      // Wait for the next cycle before re-focusing
+      await nextTick();
+      (email as HTMLInputElement).focus();
+    } finally {
+      isLoading.value = false;
+      (submit as HTMLButtonElement).disabled = false;
+    }
+  });
+  // weave-cloak is automatically removed after init
 });
 ```
 

@@ -6,12 +6,17 @@ A modern TypeScript reactive library that makes any existing HTML reactive witho
 
 - **Zero Markup Pollution**: No custom attributes in HTML - all configuration is in pure TypeScript
 - **Progressive Enhancement**: Start simple, add complexity only when needed
-- **Bidirectional Sync**: DOM changes update state, state changes update DOM
+- **Bidirectional Sync**: `model()` creates automatic two-way binding between inputs and refs
 - **Type Safety**: Full TypeScript strict mode with complete type inference
 - **Performance First**: Lazy resolution, surgical observers, automatic batching
 - **Store System**: Global reactive state management with actions and computed properties
 - **Lifecycle Hooks**: onInit, onUpdate, onDestroy for complete control
 - **Advanced Features**: Promise integration, template rendering, head management, page transitions
+- **teleport()**: Move elements to any DOM target (modals, tooltips)
+- **dispatch()**: Emit custom events between components without a shared store
+- **$refs()**: Access DOM elements by `weave-ref` attribute without CSS selectors
+- **nextTick()**: Execute code after the current reactive cycle
+- **[weave-cloak]**: Hide elements until Weave is ready, no flash of un-initialized content
 
 ## Installation
 

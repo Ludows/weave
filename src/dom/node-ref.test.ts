@@ -5,6 +5,7 @@
 import * as fc from 'fast-check';
 import { JSDOM } from 'jsdom';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { ref } from '../reactive/ref';
 import { NodeRef } from './node-ref';
 
 describe('NodeRef - Property Tests', () => {
@@ -276,6 +277,106 @@ describe('NodeRef - Property Tests', () => {
       ),
       { numRuns: 50 }
     );
+  });
+
+  // ─── model() ────────────────────────────────────────────────────────────────
+
+  it('model(): initializes input value from ref', () => {
+    const input = document.createElement('input');
+    input.id = 'model-init';
+    rootElement.appendChild(input);
+
+    const name = ref('hello');
+    new NodeRef('#model-init', rootElement).model(name);
+
+    expect(input.value).toBe('hello');
+  });
+
+  it('model(): updates input when ref changes', async () => {
+    const input = document.createElement('input');
+    input.id = 'model-reactive';
+    rootElement.appendChild(input);
+
+    const name = ref('initial');
+    new NodeRef('#model-reactive', rootElement).model(name);
+
+    name.value = 'updated';
+    // Wait a microtask for the reactive effect to run
+    await Promise.resolve();
+    expect(input.value).toBe('updated');
+  });
+
+  it('model(): updates ref when input fires an input event', () => {
+    const input = document.createElement('input');
+    input.id = 'model-bidir';
+    rootElement.appendChild(input);
+
+    const name = ref('');
+    new NodeRef('#model-bidir', rootElement).model(name);
+
+    input.value = 'typed';
+    input.dispatchEvent(new (dom.window.Event)('input', { bubbles: true }));
+
+    expect(name.value).toBe('typed');
+  });
+
+  it('model(): throws on non-input elements', () => {
+    const div = document.createElement('div');
+    div.id = 'model-err';
+    rootElement.appendChild(div);
+
+    const r = ref('x');
+    expect(() => new NodeRef('#model-err', rootElement).model(r)).toThrow(
+      'model() can only be used on input, textarea, or select elements'
+    );
+  });
+
+  // ─── teleport() ─────────────────────────────────────────────────────────────
+
+  it('teleport(): moves element to target', () => {
+    const el = document.createElement('div');
+    el.id = 'teleport-src';
+    rootElement.appendChild(el);
+
+    const target = document.createElement('section');
+    target.id = 'teleport-target';
+    document.body.appendChild(target);
+
+    global.document = document as any;
+
+    new NodeRef('#teleport-src', rootElement).teleport('#teleport-target');
+
+    expect(target.contains(el)).toBe(true);
+    expect(rootElement.contains(el)).toBe(false);
+  });
+
+  it('teleport(): leaves a placeholder comment in original position', () => {
+    const el = document.createElement('div');
+    el.id = 'teleport-placeholder';
+    rootElement.appendChild(el);
+
+    const target = document.createElement('section');
+    target.id = 'teleport-ph-target';
+    document.body.appendChild(target);
+
+    global.document = document as any;
+
+    new NodeRef('#teleport-placeholder', rootElement).teleport('#teleport-ph-target');
+
+    const comments = Array.from(rootElement.childNodes).filter(n => n.nodeType === 8);
+    expect(comments.length).toBeGreaterThan(0);
+  });
+
+  it('teleport(): throws when target is not found', () => {
+    const el = document.createElement('div');
+    el.id = 'teleport-nofound';
+    rootElement.appendChild(el);
+
+    global.document = document as any;
+
+    expect(() =>
+      new NodeRef('#teleport-nofound', rootElement).teleport('#does-not-exist')
+    ).toThrow('teleport(): target not found');
   });
 
   it('Property 3: lazy resolution works consistently across multiple NodeRef instances', () => {

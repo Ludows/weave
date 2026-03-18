@@ -85,6 +85,8 @@ export { createCollectionMutations } from './collections/collection-mutations';
 export { some } from './dom/node-ref';
 export { parseConfig, parseConfigWithSchema } from './utils/parser';
 export { prettyPrint, serialize } from './utils/pretty-printer';
+export { nextTick } from './utils/next-tick';
+export { initCloak } from './dom/cloak';
 
 // Type exports
 export type { AdapterFactory, BarbaInstance, SwupInstance } from './advanced/adapters';

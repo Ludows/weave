@@ -294,18 +294,111 @@ describe('weave() - CallbackContext API Methods (Task 4.3)', () => {
 
   it('should provide $.onUpdate() that returns unwatch function', () => {
     testContainer.innerHTML = '<div class="target"></div>';
-    
+
     const instance = weave('.target', () => {});
-    
+
     let updateCalled = false;
     const unwatch = instance.$.onUpdate(() => {
       updateCalled = true;
     });
-    
+
     expect(typeof unwatch).toBe('function');
-    
+
     // Calling unwatch should remove the hook
     unwatch();
     expect(updateCalled).toBe(false);
+  });
+});
+
+describe('weave() - nextTick, dispatch, $refs', () => {
+  let testContainer: HTMLDivElement;
+
+  beforeEach(() => {
+    testContainer = document.createElement('div');
+    testContainer.id = 'new-features-container';
+    document.body.appendChild(testContainer);
+  });
+
+  afterEach(() => {
+    document.body.removeChild(testContainer);
+  });
+
+  it('nextTick() returns a Promise that resolves after current microtask', async () => {
+    testContainer.innerHTML = '<div class="target"></div>';
+    let resolved = false;
+    let p: Promise<void>;
+
+    weave('.target', ({ nextTick }) => {
+      p = nextTick(() => { resolved = true; });
+    });
+
+    expect(resolved).toBe(false);
+    await p!;
+    expect(resolved).toBe(true);
+  });
+
+  it('nextTick() executes the provided callback', async () => {
+    testContainer.innerHTML = '<div class="target"></div>';
+    let called = false;
+
+    weave('.target', ({ nextTick }) => {
+      nextTick(() => { called = true; });
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(called).toBe(true);
+  });
+
+  it('dispatch() fires a CustomEvent on the root element', () => {
+    testContainer.innerHTML = '<div class="target"></div>';
+    const received: any[] = [];
+
+    testContainer.querySelector('.target')!.addEventListener('my-event', (e: Event) => {
+      received.push((e as CustomEvent).detail);
+    });
+
+    weave('.target', ({ dispatch }) => {
+      dispatch('my-event', { value: 42 });
+    });
+
+    expect(received).toHaveLength(1);
+    expect(received[0]).toEqual({ value: 42 });
+  });
+
+  it('dispatch() event bubbles up the DOM', () => {
+    testContainer.innerHTML = '<div class="target"></div>';
+    let bubbled = false;
+
+    testContainer.addEventListener('bubble-test', () => { bubbled = true; });
+
+    weave('.target', ({ dispatch }) => {
+      dispatch('bubble-test');
+    });
+
+    expect(bubbled).toBe(true);
+  });
+
+  it('$refs() returns elements by weave-ref attribute', () => {
+    testContainer.innerHTML = `
+      <div class="target">
+        <input weave-ref="username" />
+        <button weave-ref="submit">Go</button>
+      </div>
+    `;
+
+    weave('.target', ({ $refs }) => {
+      const refs = $refs();
+      expect(refs['username']).toBeInstanceOf(HTMLInputElement);
+      expect(refs['submit']).toBeInstanceOf(HTMLButtonElement);
+    });
+  });
+
+  it('$refs() returns empty object when no weave-ref attributes exist', () => {
+    testContainer.innerHTML = '<div class="target"><span>hello</span></div>';
+
+    weave('.target', ({ $refs }) => {
+      expect($refs()).toEqual({});
+    });
   });
 });
