@@ -1,0 +1,80 @@
+{
+  "name": "@ludoows/weave",
+  "version": "0.1.0",
+  "description": "A modern TypeScript reactive library that makes any existing HTML reactive without compilation, custom attributes, or Virtual DOM",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "types": "dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js",
+      "types": "./dist/types/index.d.ts"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "npm run build:esm && npm run build:cjs && npm run build:umd && npm run build:types",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:umd": "rollup -c rollup.config.js",
+    "build:types": "tsc -p tsconfig.types.json",
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest --run --coverage",
+    "bench": "vitest bench --run",
+    "dev": "tsc -p tsconfig.esm.json --watch",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build && npm test"
+  },
+  "keywords": [
+    "reactive",
+    "typescript",
+    "dom",
+    "proxy",
+    "reactive-programming",
+    "ui",
+    "frontend",
+    "state-management",
+    "no-virtual-dom",
+    "progressive-enhancement",
+    "bidirectional-sync",
+    "type-safe",
+    "zero-dependencies"
+  ],
+  "author": "Weave Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ludows/weave.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Ludows/weave/issues"
+  },
+  "homepage": "https://github.com/Ludows/weave#readme",
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^15.2.3",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-typescript": "^11.1.6",
+    "@types/jsdom": "^28.0.0",
+    "@types/node": "^20.11.0",
+    "@vitest/coverage-v8": "^1.2.0",
+    "fast-check": "^3.15.0",
+    "jsdom": "^28.1.0",
+    "rollup": "^4.9.6",
+    "tslib": "^2.6.2",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
