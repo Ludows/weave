@@ -20,7 +20,7 @@ export interface ProxyTarget {
  * Create a Proxy handler for reactive state management
  */
 export function createProxyHandler(
-  target: ProxyTarget,
+  _target: ProxyTarget,
   onPropertyChange?: (key: string) => void
 ): ProxyHandler<ProxyTarget> {
   return {

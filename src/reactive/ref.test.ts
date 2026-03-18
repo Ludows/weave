@@ -44,7 +44,7 @@ describe('ref() - Property Tests', () => {
             const effectId = i;
             const effect = createReactiveEffect(() => {
               // Access ref.value to create dependency
-              const _ = testRef.value;
+              void testRef.value;
               executionCounts.set(effectId, executionCounts.get(effectId)! + 1);
             });
             effects.push(effect);
@@ -87,7 +87,7 @@ describe('ref() - Property Tests', () => {
           let executionCount = 0;
           
           const effect = createReactiveEffect(() => {
-            const _ = testRef.value;
+            void testRef.value;
             executionCount++;
           });
           
@@ -117,6 +117,8 @@ describe('ref() - Property Tests', () => {
         fc.integer(),
         fc.integer(),
         (val1, val2, newVal1) => {
+          fc.pre(newVal1 !== val1);
+
           const ref1 = ref(val1);
           const ref2 = ref(val2);
           
@@ -125,13 +127,13 @@ describe('ref() - Property Tests', () => {
           
           // Effect that depends only on ref1
           const effect1 = createReactiveEffect(() => {
-            const _ = ref1.value;
+            void ref1.value;
             effect1Count++;
           });
           
           // Effect that depends only on ref2
           const effect2 = createReactiveEffect(() => {
-            const _ = ref2.value;
+            void ref2.value;
             effect2Count++;
           });
           

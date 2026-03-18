@@ -21,7 +21,8 @@ export type DirectiveType =
   | 'focus'
   | 'blur'
   | 'scroll'
-  | 'template';
+  | 'template'
+  | 'when';
 
 /**
  * Represents a directive binding

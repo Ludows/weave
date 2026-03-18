@@ -72,7 +72,7 @@ export function promise<T = any>(
 export function promiseWithWatch<T = any>(
   url: () => string,
   options?: PromiseOptions<T> & { watch?: boolean; debounce?: number },
-  instanceContext?: any
+  _instanceContext?: any
 ): PromiseResult<T> {
   let currentAbort: (() => void) | null = null;
   let currentPromise: Promise<T> | null = null;
