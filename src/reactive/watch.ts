@@ -16,7 +16,7 @@ export function watch(
   
   // Extract handler and options
   let handler: WatchHandler;
-  let options: { deep?: boolean; debounce?: number } = {};
+  const options: { deep?: boolean; debounce?: number } = {};
   
   if (typeof handlerOrOptions === 'function') {
     handler = handlerOrOptions;

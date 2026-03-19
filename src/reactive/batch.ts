@@ -6,7 +6,7 @@ import type { BatchFn } from '../types';
 
 // Global batch state
 let batchDepth = 0;
-let pendingUpdates = new Set<() => void>();
+const pendingUpdates = new Set<() => void>();
 let microtaskScheduled = false;
 
 /**

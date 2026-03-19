@@ -13,7 +13,13 @@ export default defineConfig({
         '**/*.test.ts',
         '**/*.config.ts',
         '**/*.config.js'
-      ]
+      ],
+      thresholds: {
+        lines: 75,
+        functions: 72,
+        branches: 83,
+        statements: 75
+      }
     }
   }
 });
