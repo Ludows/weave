@@ -92,6 +92,7 @@ export { initCloak } from './dom/cloak';
 
 // Type exports
 export type { AdapterFactory, BarbaInstance, SwupInstance } from './advanced/adapters';
+export type { ProxyCollection, CollectionAccessor, PaginationResult } from './types';
 export type {
     ActionContext, BatchFn, CallbackContext, CollectionMacroFn, ContextMacroFn, EventHandler, ForContext, GroupActionContext, HeadConfig, IfOptions, MacroFn, MacroRegistry, NodeRef, NodeRefMacroFn, ObserveInstance, PromiseOptions,
     PromiseResult, Ref,
