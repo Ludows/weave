@@ -71,6 +71,7 @@ export function persist(options: {
       }
 
       timeoutId = setTimeout(() => {
+        timeoutId = null;
         try {
           const toSave: any = {};
           

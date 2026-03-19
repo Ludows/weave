@@ -32,6 +32,8 @@ export interface CallbackContext<S = unknown> {
   onUpdate: (fn: (newState: Snapshot<S>, oldState: Snapshot<S>) => void) => void;
   onDestroy: (fn: (state: Snapshot<S>) => void) => void;
   cleanup: (fn: () => void) => void;
+  onError: (fn: (error: Error, info: string) => void) => void;
+  $el: Element;
   macro: (name: string, fn: ContextMacroFn) => void;
 }
 
@@ -53,6 +55,7 @@ export interface UtilsAPI<S = unknown> {
 // NodeRef types
 export interface NodeRef {
   value: unknown;
+  el: Element;
   text: (value: unknown | (() => unknown)) => NodeRef;
   html: (value: unknown | (() => unknown)) => NodeRef;
   show: (value: boolean | (() => boolean)) => NodeRef;
@@ -68,7 +71,7 @@ export interface NodeRef {
   focus: (condition: boolean | (() => boolean)) => NodeRef;
   blur: (condition: boolean | (() => boolean)) => NodeRef;
   scroll: (condition: boolean | (() => boolean), options?: ScrollIntoViewOptions) => NodeRef;
-  for: <T>(items: T[] | (() => T[]), callback: (item: T, index: number, context: ForContext) => void) => NodeRef;
+  for: <T>(items: T[] | (() => T[]), callback: (item: T, index: number, context: ForContext) => void, key?: (item: T, index: number) => string | number) => NodeRef;
   template: (config: TemplateConfig) => NodeRef;
   has: (attribute: string, value?: unknown) => boolean;
   when: (condition: () => boolean, callback: (element: Element) => void) => NodeRef;
@@ -187,6 +190,7 @@ export interface SyncOptions {
   after?: () => void;
   target?: () => Element;
   restore?: boolean;
+  cleanup?: () => void;
 }
 
 // Macro types

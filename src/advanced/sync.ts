@@ -10,6 +10,7 @@ export interface SyncOptions {
   after?: () => void;
   target?: () => Element;
   restore?: boolean;  // default: true
+  cleanup?: () => void;
 }
 
 interface SyncSnapshot {

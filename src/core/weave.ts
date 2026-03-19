@@ -3,6 +3,7 @@
  */
 
 import { createHeadManager, type HeadConfig } from '../advanced/head';
+import { devWarn } from '../utils/dev-mode';
 import { initCloak } from '../dom/cloak';
 import { nextTick as nextTickFn } from '../utils/next-tick';
 import { promise as promiseFn, promiseWithWatch } from '../advanced/promise';
@@ -43,7 +44,11 @@ function triggerUpdateHooks<S = any>(proxyTarget: ProxyTarget, instanceState: In
   const oldState = instanceState.previousState as Readonly<S>;
   
   instanceState.lifecycleHooks.onUpdate.forEach(hook => {
-    hook(newState, oldState);
+    try {
+      hook(newState, oldState);
+    } catch (error) {
+      handleError(error as Error, 'onUpdate', instanceState);
+    }
   });
   
   instanceState.previousState = newState;
@@ -59,12 +64,28 @@ interface InstanceState {
     onInit: Array<(state: Snapshot<any>) => void | Promise<void>>;
     onUpdate: Array<(newState: Snapshot<any>, oldState: Snapshot<any>) => void>;
     onDestroy: Array<(state: Snapshot<any>) => void>;
+    onError: Array<(error: Error, info: string) => void>;
   };
   isInitialized: boolean;
   previousState: Snapshot<any> | null;
   initialState: Snapshot<any> | null;
   dirtyKeys: Set<string>;
   originalSelector?: string; // For sync() reattachment
+}
+
+function handleError(error: Error, info: string, instanceState: InstanceState): void {
+  const handlers = instanceState.lifecycleHooks.onError;
+  if (handlers.length > 0) {
+    handlers.forEach(handler => {
+      try {
+        handler(error, info);
+      } catch {
+        console.error(`[Weave] Error in onError handler:`, error);
+      }
+    });
+  } else if (process.env.NODE_ENV !== 'production') {
+    console.error(`[Weave] Unhandled error in ${info}:`, error);
+  }
 }
 
 export function weave<S = any>(
@@ -75,15 +96,18 @@ export function weave<S = any>(
   const originalSelector = typeof target === 'string' ? target : undefined;
   
   if (typeof target === 'string') {
+    if (!target.trim()) {
+      throw new Error(`weave(): selector cannot be empty`);
+    }
     const nodeList = document.querySelectorAll(target);
     if (nodeList.length === 0) {
-      throw new Error(`weave : élément introuvable (${target})`);
+      throw new Error(`weave(): element not found (${target})`);
     }
     elements = Array.from(nodeList);
   } else if (target instanceof Element) {
     elements = [target];
   } else {
-    throw new Error(`weave : élément introuvable (${target})`);
+    throw new Error(`weave(): invalid target — expected a CSS selector or Element`);
   }
   
   if (elements.length > 1) {
@@ -116,7 +140,8 @@ function createInstance<S = any>(
     lifecycleHooks: {
       onInit: [],
       onUpdate: [],
-      onDestroy: []
+      onDestroy: [],
+      onError: []
     },
     isInitialized: false,
     previousState: null,
@@ -139,8 +164,12 @@ function createInstance<S = any>(
   
   const context: CallbackContext<S> = createCallbackContext(proxyTarget, proxy, instanceState);
   
-  callback(context);
-  
+  try {
+    callback(context);
+  } catch (error) {
+    handleError(error as Error, 'callback', instanceState);
+  }
+
   // Execute onInit hooks using Promise.resolve() for better test compatibility
   Promise.resolve().then(async () => {
     const initialSnapshot = getStateSnapshot<S>(proxyTarget, instanceState);
@@ -149,7 +178,11 @@ function createInstance<S = any>(
 
     // Execute onInit hooks
     for (const hook of instanceState.lifecycleHooks.onInit) {
-      await hook(initialSnapshot);
+      try {
+        await hook(initialSnapshot);
+      } catch (error) {
+        handleError(error as Error, 'onInit', instanceState);
+      }
     }
 
     // Mark as initialized AFTER onInit hooks complete
@@ -172,6 +205,9 @@ function createCallbackContext<S = any>(
   // Create base context object
   const context: CallbackContext<S> = {
     $: (selector: string) => {
+      if (!selector || !selector.trim()) {
+        devWarn('$() called with empty selector');
+      }
       // Check if NodeRef already cached
       if (!instanceState.nodeRefs.has(selector)) {
         const nodeRef = new NodeRef(selector, proxyTarget._el!);
@@ -321,6 +357,10 @@ function createCallbackContext<S = any>(
       });
       return refsMap;
     },
+    onError: (fn: (error: Error, info: string) => void) => {
+      instanceState.lifecycleHooks.onError.push(fn);
+    },
+    $el: proxyTarget._el!,
     macro: (name: string, fn: ContextMacroFn) => {
       // Get or create local registry for this instance
       const registry = getLocalRegistry(instanceState);
@@ -367,7 +407,13 @@ function createUtilsAPI<S = any>(
     destroy: () => {
       // Execute onDestroy hooks first
       const finalState = getStateSnapshot(proxyTarget, instanceState);
-      instanceState.lifecycleHooks.onDestroy.forEach(fn => fn(finalState));
+      instanceState.lifecycleHooks.onDestroy.forEach(fn => {
+        try {
+          fn(finalState);
+        } catch (error) {
+          handleError(error as Error, 'onDestroy', instanceState);
+        }
+      });
       
       // Cleanup local macros before other cleanup
       cleanupLocalMacros(instanceState);

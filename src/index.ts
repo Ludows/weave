@@ -62,6 +62,7 @@ export { macro } from './core/macro';
 export { batch } from './reactive/batch';
 export { computed } from './reactive/computed';
 export { ref } from './reactive/ref';
+export { effect } from './reactive/effect';
 export { memo, unless, watch, when } from './reactive/watch';
 
 // Store exports

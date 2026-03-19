@@ -222,4 +222,96 @@ describe('for() directive', () => {
 
     expect(result).toBe(nodeRef);
   });
+
+  it('supports keyed diffing with key function', () => {
+    const list = document.createElement('ul');
+    list.id = 'keyed';
+    const tpl = document.createElement('li');
+    list.appendChild(tpl);
+    root.appendChild(list);
+
+    const items = ref([{ id: 1, name: 'a' }, { id: 2, name: 'b' }]);
+
+    new NodeRef('#keyed', root).for(
+      () => items.value,
+      () => {},
+      (item) => item.id
+    );
+
+    expect(list.children.length).toBe(2);
+
+    // Replace array with same ids in different order
+    items.value = [{ id: 2, name: 'b' }, { id: 1, name: 'a' }];
+    expect(list.children.length).toBe(2);
+  });
+
+  it('keyed diffing preserves DOM nodes on reorder', () => {
+    const list = document.createElement('ul');
+    list.id = 'key-preserve';
+    const tpl = document.createElement('li');
+    list.appendChild(tpl);
+    root.appendChild(list);
+
+    const items = ref([{ id: 1 }, { id: 2 }, { id: 3 }]);
+
+    new NodeRef('#key-preserve', root).for(
+      () => items.value,
+      () => {},
+      (item) => item.id
+    );
+
+    const firstChild = list.children[0];
+    const secondChild = list.children[1];
+
+    // Reorder: swap first two
+    items.value = [{ id: 2 }, { id: 1 }, { id: 3 }];
+
+    // DOM nodes should be reused (same references), just reordered
+    expect(list.children[0]).toBe(secondChild);
+    expect(list.children[1]).toBe(firstChild);
+  });
+
+  it('keyed diffing removes items by key', () => {
+    const list = document.createElement('ul');
+    list.id = 'key-remove';
+    const tpl = document.createElement('li');
+    list.appendChild(tpl);
+    root.appendChild(list);
+
+    const items = ref([{ id: 1 }, { id: 2 }, { id: 3 }]);
+
+    new NodeRef('#key-remove', root).for(
+      () => items.value,
+      () => {},
+      (item) => item.id
+    );
+
+    expect(list.children.length).toBe(3);
+
+    items.value = [{ id: 1 }, { id: 3 }];
+    expect(list.children.length).toBe(2);
+  });
+
+  it('keyed diffing only calls callback for new items', () => {
+    const list = document.createElement('ul');
+    list.id = 'key-callback';
+    const tpl = document.createElement('li');
+    list.appendChild(tpl);
+    root.appendChild(list);
+
+    const items = ref([{ id: 1 }, { id: 2 }]);
+    let callCount = 0;
+
+    new NodeRef('#key-callback', root).for(
+      () => items.value,
+      () => { callCount++; },
+      (item) => item.id
+    );
+
+    expect(callCount).toBe(2);
+
+    // Add one new item — only it should trigger callback
+    items.value = [{ id: 1 }, { id: 2 }, { id: 3 }];
+    expect(callCount).toBe(3);
+  });
 });

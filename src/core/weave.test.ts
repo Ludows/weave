@@ -58,7 +58,7 @@ describe('weave() - Element Resolution (Task 4.1)', () => {
   it('should throw error for missing element', () => {
     expect(() => {
       weave('.non-existent', () => {});
-    }).toThrow('weave : élément introuvable (.non-existent)');
+    }).toThrow('weave(): element not found (.non-existent)');
   });
 
   it('should return array for multiple element matches', () => {
@@ -144,7 +144,7 @@ describe('weave() - Property 29: Error on Missing Element', () => {
           // Verify weave() throws an error
           expect(() => {
             weave(cssSelector, () => {});
-          }).toThrow(/weave : élément introuvable/);
+          }).toThrow(/weave\(\): element not found/);
           
           // Verify the error message includes the selector
           try {
@@ -164,7 +164,7 @@ describe('weave() - Property 29: Error on Missing Element', () => {
     
     expect(() => {
       weave(selector, () => {});
-    }).toThrow(`weave : élément introuvable (${selector})`);
+    }).toThrow(`weave(): element not found (${selector})`);
   });
 });
 

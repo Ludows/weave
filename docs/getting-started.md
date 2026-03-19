@@ -172,6 +172,13 @@ weave('#app', ({ $, ref }) => {
 
   // Later: update the array and the DOM updates automatically
   users.value = [...users.value, 'Diana'];
+
+  // Keyed diffing — preserves DOM nodes on reorder
+  $('#user-list').for(
+    () => users.value,
+    (user, index, ctx) => { /* bind directives */ },
+    (user) => user.id  // key function for efficient reconciliation
+  );
 });
 ```
 
@@ -363,6 +370,88 @@ weave('#app', ({ $, ref }) => {
   const count = ref(0);
   $('#counter').text(() => count.value);
   // weave-cloak is removed automatically after onInit
+});
+```
+
+### effect() — Reactive side effects
+
+Run a function that automatically re-executes when its dependencies change. Lighter than `watch()` — no need to specify sources explicitly:
+
+```typescript
+import { ref, effect } from '@ludoows/weave';
+
+const count = ref(0);
+
+const stop = effect(() => {
+  console.log('Count is:', count.value); // tracks count automatically
+});
+
+count.value = 1; // logs "Count is: 1"
+count.value = 2; // logs "Count is: 2"
+
+stop(); // cleanup — no more tracking
+```
+
+You can return a cleanup function that runs before each re-execution:
+
+```typescript
+const stop = effect(() => {
+  const interval = setInterval(() => console.log(count.value), 1000);
+  return () => clearInterval(interval); // cleaned up on re-run or stop
+});
+```
+
+### Event modifiers
+
+`on()` supports Alpine.js-style modifiers via dot syntax:
+
+```typescript
+// Prevent default behavior
+$('#form').on('submit.prevent', handler);
+
+// Stop event propagation
+$('#btn').on('click.stop', handler);
+
+// Fire only once
+$('#btn').on('click.once', handler);
+
+// Only if event target is the element itself (not children)
+$('#div').on('click.self', handler);
+
+// Debounce (default 300ms)
+$('#input').on('input.debounce-500', handler);
+
+// Combine multiple modifiers
+$('#form').on('submit.prevent.stop', handler);
+```
+
+### $el — Direct element access
+
+Access the root DOM element directly from the callback context:
+
+```typescript
+weave('#app', ({ $el, $ }) => {
+  console.log($el.tagName); // "DIV"
+
+  // Also available on NodeRef instances
+  const btn = $('#btn');
+  btn.el.setAttribute('aria-label', 'Click me');
+});
+```
+
+### onError — Error boundaries
+
+Catch errors in your Weave instance without crashing:
+
+```typescript
+weave('#app', ({ onError, ref, $ }) => {
+  onError((error, info) => {
+    console.error(`Error in ${info}:`, error.message);
+    // info can be: "callback", "onInit", "onUpdate", "onDestroy"
+  });
+
+  const count = ref(0);
+  // If any callback throws, onError catches it
 });
 ```
 

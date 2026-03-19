@@ -43,6 +43,13 @@ export class NodeRef implements INodeRef {
   }
 
   /**
+   * Direct access to the underlying DOM element
+   */
+  get el(): Element {
+    return this.resolve();
+  }
+
+  /**
    * Get the value of the element
    * - For input/textarea/select: returns element.value
    * - For elements with data-* attributes: returns parsed attribute value
@@ -554,7 +561,11 @@ export class NodeRef implements INodeRef {
     return this;
   }
 
-  for<T>(items: T[] | (() => T[]), callback: (item: T, index: number, context: ForContext) => void): NodeRef {
+  for<T>(
+    items: T[] | (() => T[]),
+    callback: (item: T, index: number, context: ForContext) => void,
+    key?: (item: T, index: number) => string | number
+  ): NodeRef {
     const container = this.resolve();
 
     // Capture the first child element as the template, then remove it
@@ -565,10 +576,15 @@ export class NodeRef implements INodeRef {
       templateEl.remove();
     }
 
-    // Track rendered items: item → { element, cleanupFns }
-    const rendered = new Map<T, { element: Element; cleanupFns: Array<() => void> }>();
+    // Key function: user-provided or fallback to index
+    const getKey = key || ((_item: T, index: number) => index);
+
+    // Track rendered items by key
+    const rendered = new Map<string | number, { item: T; element: Element; cleanupFns: Array<() => void> }>();
 
     const renderItem = (item: T, index: number, currentArray: T[]) => {
+      const itemKey = getKey(item, index);
+
       // Clone the template
       const wrapper = document.createElement('div');
       wrapper.innerHTML = templateHTML;
@@ -584,7 +600,8 @@ export class NodeRef implements INodeRef {
           return currentArray
             .filter((_, i) => i !== index)
             .map(sibItem => {
-              const entry = rendered.get(sibItem);
+              const sibKey = getKey(sibItem, currentArray.indexOf(sibItem));
+              const entry = rendered.get(sibKey);
               return entry ? { _el: entry.element, $: { destroy: () => {} } } : null;
             })
             .filter(Boolean) as any[];
@@ -599,38 +616,41 @@ export class NodeRef implements INodeRef {
       // Call the user callback so they can bind directives to the new element
       callback(item, index, forContext);
 
-      rendered.set(item, { element: el, cleanupFns: itemCleanupFns });
+      rendered.set(itemKey, { item, element: el, cleanupFns: itemCleanupFns });
     };
 
-    const destroyItem = (item: T) => {
-      const entry = rendered.get(item);
+    const destroyItem = (itemKey: string | number) => {
+      const entry = rendered.get(itemKey);
       if (!entry) return;
       entry.cleanupFns.forEach(fn => fn());
       cleanupDirectives(entry.element);
       entry.element.remove();
-      rendered.delete(item);
+      rendered.delete(itemKey);
     };
 
     const update = () => {
       const itemArray = typeof items === 'function' ? items() : items;
+      const newKeys = new Set(itemArray.map((item, i) => getKey(item, i)));
 
-      // 1. Remove items that are no longer in the array
-      for (const item of rendered.keys()) {
-        if (!itemArray.includes(item)) {
-          destroyItem(item);
+      // 1. Remove items whose keys are no longer present
+      for (const existingKey of rendered.keys()) {
+        if (!newKeys.has(existingKey)) {
+          destroyItem(existingKey);
         }
       }
 
-      // 2. Add new items and reorder
+      // 2. Add new items
       itemArray.forEach((item, index) => {
-        if (!rendered.has(item)) {
+        const itemKey = getKey(item, index);
+        if (!rendered.has(itemKey)) {
           renderItem(item, index, itemArray);
         }
       });
 
       // 3. Reorder existing DOM nodes to match array order
       itemArray.forEach((item, index) => {
-        const entry = rendered.get(item);
+        const itemKey = getKey(item, index);
+        const entry = rendered.get(itemKey);
         if (entry) {
           const currentChild = container.children[index];
           if (currentChild !== entry.element) {
@@ -648,8 +668,8 @@ export class NodeRef implements INodeRef {
       const cleanup = () => {
         effect.deps.forEach(dep => dep.effects.delete(effect));
         effect.deps.clear();
-        for (const item of [...rendered.keys()]) {
-          destroyItem(item);
+        for (const itemKey of [...rendered.keys()]) {
+          destroyItem(itemKey);
         }
       };
 
@@ -671,8 +691,8 @@ export class NodeRef implements INodeRef {
         value: items,
         update: () => {},
         cleanup: () => {
-          for (const item of [...rendered.keys()]) {
-            destroyItem(item);
+          for (const itemKey of [...rendered.keys()]) {
+            destroyItem(itemKey);
           }
         },
       });
@@ -904,10 +924,58 @@ export class NodeRef implements INodeRef {
 
   /**
    * Attach an event listener to the element. Returns this for chaining.
+   * Supports modifiers: .prevent, .stop, .once, .self, .debounce-{ms}
+   *
+   * @example
+   * $('#form').on('submit.prevent', handler)
+   * $('#btn').on('click.stop.once', handler)
+   * $('#input').on('input.debounce-300', handler)
    */
   on(event: string, handler: (e: Event) => void): NodeRef {
     const element = this.resolve();
-    element.addEventListener(event, handler);
+
+    // Parse modifiers: "click.prevent.stop" → eventName="click", modifiers=["prevent","stop"]
+    const parts = event.split('.');
+    const eventName = parts[0]!;
+    const modifiers = parts.slice(1);
+
+    let wrappedHandler = handler;
+    const listenerOptions: AddEventListenerOptions = {};
+    let debounceTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const hasPrevent = modifiers.includes('prevent');
+    const hasStop = modifiers.includes('stop');
+    const hasSelf = modifiers.includes('self');
+    const hasOnce = modifiers.includes('once');
+
+    // Check for debounce modifier (e.g., "debounce-300")
+    let debounceMs = 0;
+    const debounceModifier = modifiers.find(m => m.startsWith('debounce'));
+    if (debounceModifier) {
+      const dParts = debounceModifier.split('-');
+      debounceMs = parseInt(dParts[1] || '300', 10);
+    }
+
+    if (hasOnce) {
+      listenerOptions.once = true;
+    }
+
+    if (hasPrevent || hasStop || hasSelf || debounceMs > 0) {
+      wrappedHandler = (e: Event) => {
+        if (hasSelf && e.target !== e.currentTarget) return;
+        if (hasPrevent) e.preventDefault();
+        if (hasStop) e.stopPropagation();
+
+        if (debounceMs > 0) {
+          if (debounceTimeout) clearTimeout(debounceTimeout);
+          debounceTimeout = setTimeout(() => handler(e), debounceMs);
+        } else {
+          handler(e);
+        }
+      };
+    }
+
+    element.addEventListener(eventName, wrappedHandler, listenerOptions);
 
     registerDirective(element, {
       type: 'bind',
@@ -915,7 +983,8 @@ export class NodeRef implements INodeRef {
       value: handler,
       update: () => {},
       cleanup: () => {
-        element.removeEventListener(event, handler);
+        element.removeEventListener(eventName, wrappedHandler, listenerOptions);
+        if (debounceTimeout) clearTimeout(debounceTimeout);
       },
     });
 
@@ -927,7 +996,8 @@ export class NodeRef implements INodeRef {
    */
   off(event: string, handler: (e: Event) => void): NodeRef {
     const element = this.resolve();
-    element.removeEventListener(event, handler);
+    const eventName = event.split('.')[0]!;
+    element.removeEventListener(eventName, handler);
     return this;
   }
 

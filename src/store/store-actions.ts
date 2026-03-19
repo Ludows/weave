@@ -145,18 +145,28 @@ export function debounceAction<S extends object, P>(
 ) {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-  return (state: S, payload: P, context: ActionContext) => {
+  const action = (state: S, payload: P, context: ActionContext) => {
     if (timeoutId) {
       clearTimeout(timeoutId);
     }
 
     return new Promise<void>((resolve) => {
       timeoutId = setTimeout(async () => {
+        timeoutId = null;
         await actionFn(state, payload, context);
         resolve();
       }, delay);
     });
   };
+
+  action.cancel = () => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+  };
+
+  return action;
 }
 
 /**
@@ -179,7 +189,7 @@ export function throttleAction<S extends object, P>(
   let lastCall = 0;
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-  return async (state: S, payload: P, context: ActionContext) => {
+  const action = async (state: S, payload: P, context: ActionContext) => {
     const now = Date.now();
 
     if (now - lastCall >= delay) {
@@ -192,9 +202,19 @@ export function throttleAction<S extends object, P>(
 
       timeoutId = setTimeout(async () => {
         lastCall = Date.now();
+        timeoutId = null;
         await actionFn(state, payload, context);
       }, delay - (now - lastCall));
     }
   };
+
+  action.cancel = () => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+  };
+
+  return action;
 }
 

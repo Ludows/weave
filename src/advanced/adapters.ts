@@ -98,28 +98,35 @@ export const adapters = {
   swup(swupInstance?: SwupInstance): SyncOptions {
     let beforeHandler: (() => void) | undefined;
     let afterHandler: (() => void) | undefined;
-    
+
     return {
       before: () => {
-        if (swupInstance && beforeHandler) {
+        if (swupInstance) {
+          beforeHandler = () => {};
           swupInstance.on('willReplaceContent', beforeHandler);
         }
       },
       after: () => {
-        if (swupInstance && afterHandler) {
+        if (swupInstance) {
+          afterHandler = () => {};
           swupInstance.on('contentReplaced', afterHandler);
         }
       },
       target: () => {
-        // Swup typically replaces content in #swup or data-swup container
-        const container = document.querySelector('#swup') || 
+        const container = document.querySelector('#swup') ||
                          document.querySelector('[data-swup]');
         if (!container) {
           throw new Error('Swup container not found');
         }
         return container;
       },
-      restore: true
+      restore: true,
+      cleanup: () => {
+        if (swupInstance) {
+          if (beforeHandler) swupInstance.off('willReplaceContent', beforeHandler);
+          if (afterHandler) swupInstance.off('contentReplaced', afterHandler);
+        }
+      }
     };
   },
   
@@ -128,23 +135,27 @@ export const adapters = {
    * Configures sync() for Turbo Drive page transitions
    */
   turbo(): SyncOptions {
+    let beforeHandler: (() => void) | undefined;
+    let afterHandler: (() => void) | undefined;
+
     return {
       before: () => {
-        document.addEventListener('turbo:before-render', () => {
-          // Turbo before render event
-        });
+        beforeHandler = () => {};
+        document.addEventListener('turbo:before-render', beforeHandler);
       },
       after: () => {
-        document.addEventListener('turbo:render', () => {
-          // Turbo after render event
-        });
+        afterHandler = () => {};
+        document.addEventListener('turbo:render', afterHandler);
       },
       target: () => {
-        // Turbo replaces the entire body or specific turbo-frame
         const frame = document.querySelector('turbo-frame');
         return frame || document.body;
       },
-      restore: true
+      restore: true,
+      cleanup: () => {
+        if (beforeHandler) document.removeEventListener('turbo:before-render', beforeHandler);
+        if (afterHandler) document.removeEventListener('turbo:render', afterHandler);
+      }
     };
   },
   
@@ -153,30 +164,34 @@ export const adapters = {
    * Configures sync() for Barba.js page transitions
    */
   barba(barbaInstance?: BarbaInstance): SyncOptions {
+    let active = true;
+
     return {
       before: () => {
         if (barbaInstance) {
           barbaInstance.hooks.before(() => {
-            // Barba before transition
+            if (!active) return;
           });
         }
       },
       after: () => {
         if (barbaInstance) {
           barbaInstance.hooks.after(() => {
-            // Barba after transition
+            if (!active) return;
           });
         }
       },
       target: () => {
-        // Barba typically uses data-barba="container"
         const container = document.querySelector('[data-barba="container"]');
         if (!container) {
           throw new Error('Barba container not found');
         }
         return container;
       },
-      restore: true
+      restore: true,
+      cleanup: () => {
+        active = false;
+      }
     };
   }
 };

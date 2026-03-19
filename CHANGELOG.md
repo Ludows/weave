@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-03-19
+
+### Added
+- **`effect()`** — Public reactive effect API: runs a function and re-runs it when dependencies change, returns a stop function with cleanup support
+- **Event modifiers** on `on()` — `.prevent`, `.stop`, `.once`, `.self`, `.debounce-{ms}` (`$('#form').on('submit.prevent', handler)`)
+- **`$el` accessor** — Direct access to the root DOM element from callback context and NodeRef (`$el`, `$('#btn').el`)
+- **`onError` hook** — Error boundary system: catch errors in callbacks, onInit, onUpdate, onDestroy without crashing the instance
+- **Keyed diffing** for `for()` — Optional `key` function for efficient list reconciliation (`$('#list').for(items, cb, item => item.id)`)
+- **`cleanup` option** on SyncOptions for adapter teardown
+
+### Fixed
+- **Memory leaks** in adapters (swup, turbo, barba) — event listeners now properly removed on cleanup
+- **Memory leaks** in `debounceAction()` and `throttleAction()` — added `.cancel()` method, timeouts cleared on completion
+- **Memory leak** in persist plugin — debounced timeout properly nullified after execution
+
+### Improved
+- **Error messages** — Switched from French to English, more contextual (`weave(): element not found (selector)`)
+- **Dev warnings** — Empty selector warning in `$()`, invalid target in `weave()`
+- 17 new tests (effect, event modifiers, keyed for, $el)
+
 ## [0.6.0] - 2026-03-19
 
 ### Improved
