@@ -13,7 +13,7 @@ export default defineConfig({
 
     nav: [
       { text: 'Guide', link: '/getting-started' },
-      { text: 'API', link: '/api/' },
+      { text: 'API', link: '/api' },
       { text: 'Examples', link: '/examples' },
       {
         text: 'v0.8.0',
@@ -53,9 +53,11 @@ export default defineConfig({
         {
           text: 'Reference',
           items: [
+            { text: 'API Reference', link: '/api' },
             { text: 'Browser Compatibility', link: '/browser-compatibility' },
             { text: 'Security', link: '/security' },
-            { text: 'Troubleshooting', link: '/troubleshooting' }
+            { text: 'Troubleshooting', link: '/troubleshooting' },
+            { text: 'Contributing', link: '/contributing' }
           ]
         }
       ]
