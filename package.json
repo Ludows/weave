@@ -1,6 +1,6 @@
 {
   "name": "@ludoows/weave",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "A modern TypeScript reactive library that makes any existing HTML reactive without compilation, custom attributes, or Virtual DOM",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",

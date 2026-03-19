@@ -55,7 +55,10 @@ weave('#app', ({ $, ref }) => {
 
 ## Documentation
 
-- [Getting Started](./docs/getting-started.md) - Installation and basic usage
+- [Getting Started](./docs/getting-started.md) - Installation, basic usage, and new APIs
+- [Reactive State In Depth](./docs/reactive-state.md) - ref, computed, watch, memo, batch and how reactivity works
+- [Store System](./docs/store.md) - Global state, actions, plugins and store groups
+- [Extensibility](./docs/extensibility.md) - Macro system: context, NodeRef and collection macros
 - [Examples](./docs/examples.md) - Common use cases and patterns
 - [Performance](./docs/performance.md) - Best practices for performance
 - [Security](./docs/security.md) - Security best practices
