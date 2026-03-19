@@ -556,135 +556,128 @@ export class NodeRef implements INodeRef {
 
   for<T>(items: T[] | (() => T[]), callback: (item: T, index: number, context: ForContext) => void): NodeRef {
     const container = this.resolve();
-    
-    // Map to track item proxies
-    const itemProxies = new Map<T, any>();
-    
-    // Shared MutationObserver for the container
-    const containerObserver = new MutationObserver((mutations) => {
-      // Detect external DOM removals
-      for (const mutation of mutations) {
-        for (const removed of mutation.removedNodes) {
-          // Find and destroy proxy for removed element
-          for (const [item, proxy] of itemProxies.entries()) {
-            if (proxy._el === removed) {
-              // Destroy proxy instance
-              if (proxy.$ && proxy.$.destroy) {
-                proxy.$.destroy();
-              }
-              itemProxies.delete(item);
-              break;
-            }
-          }
-        }
-      }
-    });
-    
-    // Observe container for child removals
-    containerObserver.observe(container, { childList: true });
-    
+
+    // Capture the first child element as the template, then remove it
+    const templateEl = container.firstElementChild;
+    let templateHTML = '';
+    if (templateEl) {
+      templateHTML = templateEl.outerHTML;
+      templateEl.remove();
+    }
+
+    // Track rendered items: item → { element, cleanupFns }
+    const rendered = new Map<T, { element: Element; cleanupFns: Array<() => void> }>();
+
+    const renderItem = (item: T, index: number, currentArray: T[]) => {
+      // Clone the template
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = templateHTML;
+      const el = wrapper.firstElementChild;
+      if (!el) return;
+
+      const itemCleanupFns: Array<() => void> = [];
+
+      // Build a ForContext for the callback
+      const forContext: ForContext = {
+        ...({} as any),
+        siblings: () => {
+          return currentArray
+            .filter((_, i) => i !== index)
+            .map(sibItem => {
+              const entry = rendered.get(sibItem);
+              return entry ? { _el: entry.element, $: { destroy: () => {} } } : null;
+            })
+            .filter(Boolean) as any[];
+        },
+        index: () => index,
+        cleanup: (fn: () => void) => { itemCleanupFns.push(fn); },
+      };
+
+      // Append the cloned element to the container
+      container.appendChild(el);
+
+      // Call the user callback so they can bind directives to the new element
+      callback(item, index, forContext);
+
+      rendered.set(item, { element: el, cleanupFns: itemCleanupFns });
+    };
+
+    const destroyItem = (item: T) => {
+      const entry = rendered.get(item);
+      if (!entry) return;
+      entry.cleanupFns.forEach(fn => fn());
+      cleanupDirectives(entry.element);
+      entry.element.remove();
+      rendered.delete(item);
+    };
+
     const update = () => {
       const itemArray = typeof items === 'function' ? items() : items;
-      const existingItems = new Set(itemProxies.keys());
-      
-      // Remove items no longer in array
-      for (const item of existingItems) {
+
+      // 1. Remove items that are no longer in the array
+      for (const item of rendered.keys()) {
         if (!itemArray.includes(item)) {
-          const proxy = itemProxies.get(item);
-          if (proxy && proxy.$ && proxy.$.destroy) {
-            proxy.$.destroy();
-          }
-          itemProxies.delete(item);
+          destroyItem(item);
         }
       }
-      
-      // Add or update items
+
+      // 2. Add new items and reorder
       itemArray.forEach((item, index) => {
-        if (!itemProxies.has(item)) {
-          // Create new element for item
-          const itemElement = container.children[index] as Element;
-          
-          if (itemElement) {
-            // Create a ForContext with siblings() and index() helpers
-            const forContext: ForContext = {
-              ...({} as any), // Placeholder for full CallbackContext
-              siblings: () => {
-                return Array.from(itemProxies.values()).filter(p => p !== itemProxies.get(item));
-              },
-              index: () => {
-                return itemArray.indexOf(item);
-              }
-            };
-            
-            // Call the callback with item, index, and context
-            // Note: This is a simplified version. Full implementation would create
-            // a proper Proxy_Instance using weave() for each item
-            callback(item, index, forContext);
-            
-            // Store a placeholder proxy (full implementation would use weave())
-            itemProxies.set(item, { _el: itemElement, $: { destroy: () => {} } });
+        if (!rendered.has(item)) {
+          renderItem(item, index, itemArray);
+        }
+      });
+
+      // 3. Reorder existing DOM nodes to match array order
+      itemArray.forEach((item, index) => {
+        const entry = rendered.get(item);
+        if (entry) {
+          const currentChild = container.children[index];
+          if (currentChild !== entry.element) {
+            container.insertBefore(entry.element, currentChild || null);
           }
         }
       });
     };
-    
-    // Create reactive effect if items is a callback
+
+    // Create reactive effect if items is a function
     if (typeof items === 'function') {
       const effect = createReactiveEffect(update);
       runEffect(effect);
-      
+
       const cleanup = () => {
-        effect.deps.forEach(dep => {
-          dep.effects.delete(effect);
-        });
+        effect.deps.forEach(dep => dep.effects.delete(effect));
         effect.deps.clear();
-        containerObserver.disconnect();
-        
-        // Destroy all item proxies
-        for (const proxy of itemProxies.values()) {
-          if (proxy.$ && proxy.$.destroy) {
-            proxy.$.destroy();
-          }
+        for (const item of [...rendered.keys()]) {
+          destroyItem(item);
         }
-        itemProxies.clear();
       };
-      
-      const directive: Directive = {
+
+      registerDirective(container, {
         type: 'for',
         element: container,
         value: items,
         update,
         cleanup,
-        effect
-      };
-      
-      registerDirective(container, directive);
+        effect,
+      });
     } else {
-      // Static array, just render once
+      // Static array — render once
       update();
-      
-      // Register cleanup for static case
-      const cleanup = () => {
-        containerObserver.disconnect();
-        for (const proxy of itemProxies.values()) {
-          if (proxy.$ && proxy.$.destroy) {
-            proxy.$.destroy();
-          }
-        }
-        itemProxies.clear();
-      };
-      
-      const directive: Directive = {
+
+      registerDirective(container, {
         type: 'for',
         element: container,
         value: items,
         update: () => {},
-        cleanup,
-      };
-      
-      registerDirective(container, directive);
+        cleanup: () => {
+          for (const item of [...rendered.keys()]) {
+            destroyItem(item);
+          }
+        },
+      });
     }
-    
+
     return this;
   }
 
@@ -812,22 +805,42 @@ export class NodeRef implements INodeRef {
     }
 
     const inputEl = element as HTMLInputElement;
+    const isCheckboxOrRadio =
+      element instanceof HTMLInputElement &&
+      (inputEl.type === 'checkbox' || inputEl.type === 'radio');
 
-    // Set initial DOM value from ref
-    inputEl.value = String(refObj.value);
+    // ── Initial sync ──────────────────────────────────────────────────
+    if (isCheckboxOrRadio) {
+      inputEl.checked = Boolean(refObj.value);
+    } else {
+      inputEl.value = String(refObj.value);
+    }
 
-    // DOM → State
+    // ── DOM → State ───────────────────────────────────────────────────
     const inputHandler = () => {
-      refObj.value = inputEl.value;
+      if (isCheckboxOrRadio) {
+        refObj.value = inputEl.checked;
+      } else {
+        refObj.value = inputEl.value;
+      }
     };
-    element.addEventListener('input', inputHandler);
-    element.addEventListener('change', inputHandler);
+    element.addEventListener(isCheckboxOrRadio ? 'change' : 'input', inputHandler);
+    if (!isCheckboxOrRadio) {
+      element.addEventListener('change', inputHandler);
+    }
 
-    // State → DOM (reactive)
+    // ── State → DOM (reactive) ────────────────────────────────────────
     const update = () => {
-      const val = String(refObj.value);
-      if (inputEl.value !== val) {
-        inputEl.value = val;
+      if (isCheckboxOrRadio) {
+        const checked = Boolean(refObj.value);
+        if (inputEl.checked !== checked) {
+          inputEl.checked = checked;
+        }
+      } else {
+        const val = String(refObj.value);
+        if (inputEl.value !== val) {
+          inputEl.value = val;
+        }
       }
     };
 
@@ -841,8 +854,10 @@ export class NodeRef implements INodeRef {
       update,
       cleanup: () => {
         cleanupEffect(effect);
-        element.removeEventListener('input', inputHandler);
-        element.removeEventListener('change', inputHandler);
+        element.removeEventListener(isCheckboxOrRadio ? 'change' : 'input', inputHandler);
+        if (!isCheckboxOrRadio) {
+          element.removeEventListener('change', inputHandler);
+        }
       },
       effect
     });
@@ -884,6 +899,35 @@ export class NodeRef implements INodeRef {
       }
     });
 
+    return this;
+  }
+
+  /**
+   * Attach an event listener to the element. Returns this for chaining.
+   */
+  on(event: string, handler: (e: Event) => void): NodeRef {
+    const element = this.resolve();
+    element.addEventListener(event, handler);
+
+    registerDirective(element, {
+      type: 'bind',
+      element,
+      value: handler,
+      update: () => {},
+      cleanup: () => {
+        element.removeEventListener(event, handler);
+      },
+    });
+
+    return this;
+  }
+
+  /**
+   * Remove an event listener from the element. Returns this for chaining.
+   */
+  off(event: string, handler: (e: Event) => void): NodeRef {
+    const element = this.resolve();
+    element.removeEventListener(event, handler);
     return this;
   }
 

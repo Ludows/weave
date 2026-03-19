@@ -322,7 +322,7 @@ weave('#app', ({ $, ref, dispatch }) => {
   });
 });
 
-// Depuis n'importe où dans la page :
+// From anywhere on the page:
 document.dispatchEvent(new CustomEvent('modal:open', {
   detail: { titleText: 'Hello', bodyText: 'This is modal content' }
 }));
@@ -369,6 +369,74 @@ weave('#login-form', ({ $refs, ref, nextTick }) => {
     }
   });
   // weave-cloak is automatically removed after init
+});
+```
+
+## Dynamic List with for()
+
+```html
+<div id="app">
+  <input id="new-item" type="text" placeholder="Add item..." />
+  <button id="add-btn">Add</button>
+  <ul id="items">
+    <li><!-- template --></li>
+  </ul>
+</div>
+```
+
+```typescript
+import { weave } from '@ludoows/weave';
+
+weave('#app', ({ $, ref }) => {
+  const items = ref<string[]>([]);
+  const newItem = ref('');
+
+  $('#new-item').model(newItem);
+
+  $('#add-btn').on('click', () => {
+    if (newItem.value.trim()) {
+      items.value = [...items.value, newItem.value.trim()];
+      newItem.value = '';
+    }
+  });
+
+  // for() clones the <li> template and renders one per item
+  // When items.value changes, only new items are added (existing ones stay)
+  $('#items').for(() => items.value, (item, index) => {
+    // callback runs once per new item
+  });
+});
+```
+
+## Checkbox & Radio with model()
+
+```html
+<form id="settings">
+  <label>
+    <input type="checkbox" id="notifications" /> Enable notifications
+  </label>
+  <label>
+    <input type="checkbox" id="darkmode" /> Dark mode
+  </label>
+  <p id="status"></p>
+</form>
+```
+
+```typescript
+import { weave } from '@ludoows/weave';
+
+weave('#settings', ({ $, ref }) => {
+  const notifications = ref(true);
+  const darkMode = ref(false);
+
+  // model() on checkbox binds to .checked (boolean)
+  $('#notifications').model(notifications);
+  $('#darkmode').model(darkMode);
+
+  $('#status').text(() =>
+    `Notifications: ${notifications.value ? 'ON' : 'OFF'}, ` +
+    `Theme: ${darkMode.value ? 'Dark' : 'Light'}`
+  );
 });
 ```
 

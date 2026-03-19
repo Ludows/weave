@@ -24,7 +24,7 @@ Use directly in the browser without a bundler:
 <script src="https://cdn.jsdelivr.net/npm/@ludoows/weave"></script>
 ```
 
-Le package est exposé en global sous `window.Weave` :
+The package is exposed globally as `window.Weave`:
 
 ```html
 <script src="https://unpkg.com/@ludoows/weave"></script>
@@ -146,23 +146,57 @@ $('#box').style({
 });
 ```
 
-### Event Handling
+### List Rendering with for()
 
-Register event listeners with `on()`:
+`for()` renders a list by cloning the first child element as a template. It supports both static arrays and reactive arrays:
+
+```html
+<ul id="user-list">
+  <li><!-- this child is used as template and removed --></li>
+</ul>
+```
 
 ```typescript
-// Click events
-$('#button').on('click', (e) => {
-  console.log('Clicked!');
-});
+weave('#app', ({ $, ref }) => {
+  const users = ref(['Alice', 'Bob', 'Charlie']);
 
-// Input events
-$('#input').on('input', (e) => {
-  const target = e.target as HTMLInputElement;
-  value.value = target.value;
-});
+  // Static array
+  $('#user-list').for(['Apple', 'Banana'], (item, index, ctx) => {
+    // Called once per item — item is the value, index is the position
+  });
 
-// Delegated events
+  // Reactive array — automatically adds/removes DOM nodes on change
+  $('#user-list').for(() => users.value, (item, index, ctx) => {
+    // Only new items trigger the callback (existing items are preserved)
+  });
+
+  // Later: update the array and the DOM updates automatically
+  users.value = [...users.value, 'Diana'];
+});
+```
+
+### Event Handling
+
+Register event listeners with `on()`. On NodeRef, `on()` and `off()` are chainable:
+
+```typescript
+// Click events — chainable with other directives
+$('#button')
+  .on('click', (e) => { console.log('Clicked!'); })
+  .addClass('interactive');
+
+// Multiple events on the same element
+$('#input')
+  .on('focus', () => { /* ... */ })
+  .on('blur', () => { /* ... */ });
+
+// Remove a specific listener
+const handler = (e: Event) => { /* ... */ };
+$('#btn').on('click', handler);
+// Later:
+$('#btn').off('click', handler);
+
+// Delegated events (via context)
 on('click', '.item', (e) => {
   console.log('Item clicked');
 });
@@ -217,10 +251,27 @@ Automatically syncs an `<input>`, `<textarea>` or `<select>` with a ref in both 
 weave('#app', ({ $, ref }) => {
   const username = ref('');
 
-  // username.value ↔ input.value en temps réel
+  // username.value ↔ input.value in real time
   $('#username').model(username);
 
   $('#greeting').text(() => `Hello, ${username.value}!`);
+});
+```
+
+Also works with checkboxes and radio buttons — the ref binds to the `checked` property instead of `value`:
+
+```typescript
+weave('#app', ({ $, ref }) => {
+  const agreed = ref(false);
+  const theme = ref(false);
+
+  // Checkbox — ref holds a boolean
+  $('#terms-checkbox').model(agreed);
+
+  // Radio — ref holds a boolean (checked/unchecked)
+  $('#dark-mode-radio').model(theme);
+
+  $('#submit').bind('disabled', () => !agreed.value);
 });
 ```
 
@@ -230,7 +281,7 @@ Moves an element to a different DOM target (useful for modals, tooltips):
 
 ```typescript
 weave('#app', ({ $ }) => {
-  // Déplace #modal-content dans <body>
+  // Move #modal-content into <body>
   $('#modal-content').teleport('body');
 });
 ```
@@ -247,7 +298,7 @@ weave('#checkout-btn', ({ dispatch }) => {
   });
 });
 
-// Dans un autre composant :
+// In another component:
 document.addEventListener('cart:checkout', (e) => {
   console.log((e as CustomEvent).detail);
 });
@@ -285,7 +336,7 @@ weave('#app', ({ $, ref, nextTick }) => {
   $('#add').on('click', async () => {
     items.value = [...items.value, 'New item'];
     await nextTick();
-    // Le DOM est maintenant à jour
+    // The DOM is now up to date
     console.log($('#list').value);
   });
 });

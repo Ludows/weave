@@ -74,6 +74,8 @@ export interface NodeRef {
   when: (condition: () => boolean, callback: (element: Element) => void) => NodeRef;
   model: (ref: Ref<any>) => NodeRef;
   teleport: (target: string | Element) => NodeRef;
+  on: (event: string, handler: (e: Event) => void) => NodeRef;
+  off: (event: string, handler: (e: Event) => void) => NodeRef;
 }
 
 export interface IfOptions {

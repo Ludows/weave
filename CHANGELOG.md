@@ -5,7 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] - 2024-01-XX
+## [0.6.0] - 2026-03-19
+
+### Improved
+- **`for()` directive** — Complete rewrite with real DOM rendering: clones a template child, dynamically creates/removes elements, supports reactive arrays with efficient diffing (only new items trigger callbacks)
+- **`model()` directive** — Added checkbox and radio button support via `checked` property binding
+- **`on()` / `off()` on NodeRef** — Chainable event handling directly on selected elements (`$('#btn').on('click', handler).addClass('active')`)
+
+### Added
+- Comprehensive test suites for `for()` (10 tests), `model()` (12 tests), and `on()`/`off()` (8 tests)
+- Updated documentation with new examples and usage guides
+
+## [0.5.0] - 2026-03-19
+
+### Added
+- Complete documentation suite: reactive-state, store system, and extensibility guides
+
+## [0.4.0] - 2026-03-19
+
+### Added
+- `model()` — Two-way binding for `<input>`, `<textarea>`, and `<select>`
+- `teleport()` — Move elements to a different DOM target with automatic cleanup
+- `dispatch()` — Emit custom events from component root
+- `$refs()` — Direct element access via `weave-ref` attribute
+- `nextTick()` — Wait for the next microtask cycle after reactive updates
+- `[weave-cloak]` — Hide elements until Weave initialization completes
+
+## [0.3.0] - 2026-03-19
+
+### Added
+- CDN support via unpkg and jsDelivr (`dist/umd/weave.min.js`)
+- `unpkg` and `jsdelivr` fields in package.json
+
+### Fixed
+- Import paths in documentation examples
+
+## [0.2.0] - 2026-03-19
+
+### Fixed
+- TypeScript strict mode errors (`TS6133` unused variables, `TS2322` type mismatches)
+- Property-based test failure with counterexample `[-14, 0, -14]`
+- Source map generation disabled (no more `.map` files in dist)
+
+## [0.1.0] - 2026-03-19
 
 ### Added
 
@@ -24,32 +66,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### DOM Integration
 - NodeRef system with lazy querySelector resolution
-- Comprehensive directive system:
-  - `text()` and `html()` for content updates
-  - `show()` and `hide()` for visibility control
-  - `if()` for conditional mounting/unmounting
-  - `bind()` for attribute binding
-  - `attr()`, `addClass()`, `removeClass()`, `toggleClass()` for attribute/class manipulation
-  - `data()` for data attribute management
-  - `style()` for inline style binding
-  - `focus()`, `blur()`, `scroll()` for focus/scroll control
-  - `for()` for list rendering with automatic sync
-  - `template()` for template rendering (string, URL, sibling)
+- Comprehensive directive system: `text()`, `html()`, `show()`, `hide()`, `if()`, `bind()`, `attr()`, `addClass()`, `removeClass()`, `toggleClass()`, `data()`, `style()`, `focus()`, `blur()`, `scroll()`, `for()`, `template()`
 
 #### Event System
 - Event delegation with `on()` and `off()`
 - Support for document and window events
 - Automatic cleanup on destruction
-- Type-safe event handlers
 
 #### Store System
 - `createStore()` for global reactive state
 - Store actions with composition via `call()`
-- Store computed properties
-- Store plugin system for extensibility
+- Store computed properties and plugin system
 - `createStoreGroup()` for orchestrating multiple stores
-- Cross-store computed properties and actions
-- Store watchers and dirty tracking
 
 #### Advanced Features
 - `promise()` for integrated fetch with lifecycle callbacks
@@ -57,50 +85,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `when()` and `unless()` for conditional execution
 - `memo()` for memoization
 - `head()` for document metadata management
-- `sync()` for DOM reattachment during page transitions
-- Preconfigured adapters for Swup, Turbo, and Barba.js
+- `sync()` for DOM reattachment (Swup, Turbo, Barba.js adapters)
 
 #### Lifecycle & Cleanup
 - `onInit()`, `onUpdate()`, `onDestroy()` lifecycle hooks
 - `cleanup()` for resource management
 - Automatic cleanup of observers, listeners, and watchers
-- Recursive destruction of child instances
-
-#### Developer Experience
-- Full TypeScript strict mode support
-- Complete type inference for refs, computed, and stores
-- Zero `any` types in codebase
-- Development mode with warnings and error messages
-- Contextual error messages with suggestions
 
 #### Build & Distribution
-- ES Module (ESM) build for modern bundlers
-- CommonJS (CJS) build for Node.js compatibility
-- UMD build for direct browser usage
+- ES Module (ESM), CommonJS (CJS), and UMD builds
 - Complete TypeScript declaration files (.d.ts)
 - Tree-shaking support
-- Source maps for debugging
-
-#### Testing
-- Comprehensive unit test suite
-- Property-based tests with fast-check
-- Integration tests for complete workflows
-- 100+ test iterations for property tests
-
-#### Documentation
-- Complete API reference
-- Getting started guide
-- Security best practices
-- Common use case examples
-- TypeScript usage guide
-- Performance optimization guide
-
-### Browser Compatibility
-- Chrome/Edge 49+
-- Firefox 18+
-- Safari 10+
-
-### Dependencies
 - Zero runtime dependencies
-- Development dependencies only for build and testing
-
