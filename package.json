@@ -1,6 +1,6 @@
 {
   "name": "@ludoows/weave",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "A modern TypeScript reactive library that makes any existing HTML reactive without compilation, custom attributes, or Virtual DOM",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
@@ -35,7 +35,10 @@
     "bench": "vitest bench --run",
     "dev": "tsc -p tsconfig.esm.json --watch",
     "clean": "rm -rf dist",
-    "prepublishOnly": "npm run clean && npm run build && npm test"
+    "prepublishOnly": "npm run clean && npm run build && npm test",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
   },
   "keywords": [
     "reactive",
@@ -74,6 +77,7 @@
     "rollup": "^4.9.6",
     "tslib": "^2.6.2",
     "typescript": "^5.3.3",
+    "vitepress": "^1.6.4",
     "vitest": "^1.2.0"
   },
   "engines": {

@@ -66,10 +66,11 @@ export { effect } from './reactive/effect';
 export { memo, unless, watch, when } from './reactive/watch';
 
 // Store exports
-export { createStore } from './store/create-store';
+export { createStore, createPlugin } from './store/create-store';
 export { asyncAction, composeActions, debounceAction, parallelActions, retryAction, throttleAction } from './store/store-actions';
 export { createStoreGroup } from './store/store-group';
-export { devtools, logger, persist, validate } from './store/store-plugins';
+export { devtools, getDevtoolsInspector, logger, persist, validate } from './store/store-plugins';
+export type { DevtoolsEvent, DevtoolsInspector } from './store/store-plugins';
 
 // Advanced exports
 export { adapters } from './advanced/adapters';

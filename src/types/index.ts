@@ -143,13 +143,27 @@ export interface StoreInstance<S, C, A> {
   diff: (snapshot?: Snapshot<S>) => Record<string, { from: unknown; to: unknown }>;
   reset: () => void;
   plugin: (plugin: StorePlugin) => void;
+  destroy: () => void;
 }
 
 export interface StorePlugin {
   name: string;
-  onStateChange?: (newState: unknown, oldState: unknown, store: StoreInstance<unknown, unknown, unknown>) => void;
-  onActionCall?: (actionName: string, payload: unknown, store: StoreInstance<unknown, unknown, unknown>) => void;
+  /** Plugin priority — lower runs first (default: 10) */
+  priority?: number;
+  /** Called when the store is fully initialized */
   onInit?: (store: StoreInstance<unknown, unknown, unknown>) => void;
+  /** Called BEFORE a state mutation (can throw to reject) */
+  onStateChange?: (newState: unknown, oldState: unknown, store: StoreInstance<unknown, unknown, unknown>) => void;
+  /** Called AFTER a state mutation has been applied */
+  onAfterStateChange?: (newState: unknown, oldState: unknown, store: StoreInstance<unknown, unknown, unknown>) => void;
+  /** Called BEFORE an action is dispatched */
+  onBeforeAction?: (actionName: string, payload: unknown, store: StoreInstance<unknown, unknown, unknown>) => void;
+  /** Called AFTER an action has been dispatched (alias: onActionCall) */
+  onActionCall?: (actionName: string, payload: unknown, store: StoreInstance<unknown, unknown, unknown>) => void;
+  /** Called when the store is destroyed */
+  onDestroy?: (store: StoreInstance<unknown, unknown, unknown>) => void;
+  /** Called when an error occurs in the store */
+  onError?: (error: Error, context: string, store: StoreInstance<unknown, unknown, unknown>) => void;
 }
 
 export interface ActionContext {

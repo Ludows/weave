@@ -27,6 +27,48 @@ interface StoreInternals<S extends object> {
   _initialState: S | null;
   _dirtyKeys: Set<string>;
   _watchers: Map<string, Set<(newValue: any, oldValue: any) => void>>;
+  _destroyed: boolean;
+}
+
+/**
+ * Sort plugins by priority (lower number = runs first, default 10)
+ */
+function sortPlugins(plugins: StorePlugin[]): void {
+  plugins.sort((a, b) => (a.priority ?? 10) - (b.priority ?? 10));
+}
+
+/**
+ * Run a plugin hook safely, catching errors and forwarding them to onError hooks
+ */
+function runPluginHook(
+  plugins: StorePlugin[],
+  hookName: string,
+  args: any[],
+  store: any
+): void {
+  for (const plugin of plugins) {
+    const hook = (plugin as any)[hookName];
+    if (hook) {
+      try {
+        hook(...args);
+      } catch (error) {
+        // Forward to onError hooks (skip the plugin that threw)
+        for (const p of plugins) {
+          if (p !== plugin && p.onError) {
+            try {
+              p.onError(error as Error, `plugin:${plugin.name}:${hookName}`, store);
+            } catch {
+              // Prevent infinite loops
+            }
+          }
+        }
+        // Re-throw for validation plugins (onStateChange)
+        if (hookName === 'onStateChange') {
+          throw error;
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -44,7 +86,8 @@ export function createStore<S extends object = any, C = any, A = any>(
     _plugins: [],
     _initialState: null,
     _dirtyKeys: new Set(),
-    _watchers: new Map()
+    _watchers: new Map(),
+    _destroyed: false
   };
 
   // Create the callback context
@@ -53,15 +96,15 @@ export function createStore<S extends object = any, C = any, A = any>(
       internals._state = { ...initialState };
       internals._initialState = { ...initialState };
     },
-    
+
     computed: (name, fn) => {
       internals._computed[name] = fn;
     },
-    
+
     action: (name, fn) => {
       internals._actions[name] = fn;
     },
-    
+
     use: (plugin) => {
       internals._plugins.push(plugin);
       // onInit will be called after store is fully initialized
@@ -71,38 +114,38 @@ export function createStore<S extends object = any, C = any, A = any>(
   // Execute the callback to initialize the store
   callback(context);
 
+  // Sort plugins by priority
+  sortPlugins(internals._plugins);
+
   // Create reactive state proxy
   const stateProxy = new Proxy(internals._state, {
     get(target, key: string) {
       // Track dependency
       track(stateProxy, key);
-      
+
       // Check if it's a computed property
       const computedFn = internals._computed[key];
       if (computedFn) {
         return computedFn(internals._state);
       }
-      
+
       return target[key as keyof S];
     },
-    
+
     set(target, key: string, value) {
       const oldValue = target[key as keyof S];
-      
+
       if (oldValue !== value) {
         // Create a preview of the new state for validation
         const newStatePreview = { ...target, [key]: value } as S;
-        
-        // Notify plugins BEFORE mutation (for validation)
-        internals._plugins.forEach(plugin => {
-          if (plugin.onStateChange) {
-            plugin.onStateChange(newStatePreview, target as S, storeInstance as any);
-          }
-        });
-        
+        const oldStateSnapshot = { ...target } as S;
+
+        // Notify plugins BEFORE mutation (for validation — can throw)
+        runPluginHook(internals._plugins, 'onStateChange', [newStatePreview, oldStateSnapshot, storeInstance], storeInstance);
+
         // If we reach here, validation passed - now mutate
         target[key as keyof S] = value;
-        
+
         // Track dirty state
         if (internals._initialState) {
           if (internals._initialState[key as keyof S] !== value) {
@@ -111,23 +154,26 @@ export function createStore<S extends object = any, C = any, A = any>(
             internals._dirtyKeys.delete(key);
           }
         }
-        
+
         // Trigger watchers
         const watchers = internals._watchers.get(key);
         if (watchers) {
           watchers.forEach(handler => handler(value, oldValue));
         }
-        
+
         // Trigger wildcard watchers
         const wildcardWatchers = internals._watchers.get('*');
         if (wildcardWatchers) {
           wildcardWatchers.forEach(handler => handler(internals._state, { ...target, [key]: oldValue }));
         }
-        
+
         // Trigger reactive updates
         trigger(stateProxy, key);
+
+        // Notify plugins AFTER mutation
+        runPluginHook(internals._plugins, 'onAfterStateChange', [{ ...target } as S, oldStateSnapshot, storeInstance], storeInstance);
       }
-      
+
       return true;
     }
   });
@@ -140,14 +186,13 @@ export function createStore<S extends object = any, C = any, A = any>(
       if (!action) {
         throw new Error(`Action '${actionName}' not found in store '${name}'`);
       }
-      
-      // Notify plugins
-      internals._plugins.forEach(plugin => {
-        if (plugin.onActionCall) {
-          plugin.onActionCall(actionName, payload, storeInstance as any);
-        }
-      });
-      
+
+      // Notify plugins BEFORE action
+      runPluginHook(internals._plugins, 'onBeforeAction', [actionName, payload, storeInstance], storeInstance);
+
+      // Notify plugins (legacy onActionCall — kept for backward compat)
+      runPluginHook(internals._plugins, 'onActionCall', [actionName, payload, storeInstance], storeInstance);
+
       return action(stateProxy as S, payload, actionContext);
     }
   };
@@ -158,14 +203,13 @@ export function createStore<S extends object = any, C = any, A = any>(
       if (!action) {
         throw new Error(`Action '${actionName}' not found in store '${name}'`);
       }
-      
-      // Notify plugins
-      internals._plugins.forEach(plugin => {
-        if (plugin.onActionCall) {
-          plugin.onActionCall(actionName, payload, storeInstance as any);
-        }
-      });
-      
+
+      // Notify plugins BEFORE action
+      runPluginHook(internals._plugins, 'onBeforeAction', [actionName, payload, storeInstance], storeInstance);
+
+      // Notify plugins (legacy onActionCall)
+      runPluginHook(internals._plugins, 'onActionCall', [actionName, payload, storeInstance], storeInstance);
+
       return action(stateProxy as S, payload, actionContext);
     };
   });
@@ -175,27 +219,27 @@ export function createStore<S extends object = any, C = any, A = any>(
     name,
     state: stateProxy as S & C,
     actions: actionsProxy as A,
-    
+
     watch: (_fn: WatchSource | WatchSource[], handler: WatchHandler | WatchOptions) => {
       const actualHandler = typeof handler === 'function' ? handler : handler.then;
-      
+
       // Simple implementation: watch all state properties
       const prevValues = new Map<string, any>();
-      
+
       (Object.keys(internals._state) as Array<keyof S>).forEach(key => {
         prevValues.set(key as string, internals._state[key]);
-        
+
         let watchers = internals._watchers.get(key as string);
         if (!watchers) {
           watchers = new Set();
           internals._watchers.set(key as string, watchers);
         }
-        
+
         watchers.add((newValue, oldValue) => {
           actualHandler(newValue, oldValue);
         });
       });
-      
+
       return () => {
         // Remove watchers
         (Object.keys(internals._state) as Array<keyof S>).forEach(key => {
@@ -206,14 +250,14 @@ export function createStore<S extends object = any, C = any, A = any>(
         });
       };
     },
-    
+
     isDirty: (key?: string) => {
       if (key) {
         return internals._dirtyKeys.has(key);
       }
       return internals._dirtyKeys.size > 0;
     },
-    
+
     getDirty: () => {
       const dirty: Partial<S> = {};
       internals._dirtyKeys.forEach(key => {
@@ -221,51 +265,70 @@ export function createStore<S extends object = any, C = any, A = any>(
       });
       return dirty;
     },
-    
+
     diff: (snapshot?: Snapshot<S>) => {
       const compareWith = snapshot || internals._initialState || ({} as S);
       const diff: Record<string, { from: any; to: any }> = {};
-      
+
       (Object.keys(internals._state) as Array<keyof S>).forEach(key => {
         const currentValue = internals._state[key];
         const compareValue = compareWith[key];
-        
+
         if (currentValue !== compareValue) {
           diff[key as string] = { from: compareValue, to: currentValue };
         }
       });
-      
+
       return diff;
     },
-    
+
     reset: () => {
       if (internals._initialState) {
         (Object.keys(internals._initialState) as Array<keyof S>).forEach(key => {
           internals._state[key] = internals._initialState![key];
         });
         internals._dirtyKeys.clear();
-        
+
         // Trigger updates for all properties
         (Object.keys(internals._state) as Array<keyof S>).forEach(key => {
           trigger(stateProxy, key as string);
         });
       }
     },
-    
+
     plugin: (plugin: StorePlugin) => {
       internals._plugins.push(plugin);
+      sortPlugins(internals._plugins);
       if (plugin.onInit) {
         plugin.onInit(storeInstance as any);
       }
+    },
+
+    destroy: () => {
+      if (internals._destroyed) return;
+      internals._destroyed = true;
+
+      // Notify plugins
+      runPluginHook(internals._plugins, 'onDestroy', [storeInstance], storeInstance);
+
+      // Clear watchers
+      internals._watchers.clear();
+      internals._dirtyKeys.clear();
     }
   };
 
   // Call onInit for plugins
-  internals._plugins.forEach(plugin => {
-    if (plugin.onInit) {
-      plugin.onInit(storeInstance as any);
-    }
-  });
+  runPluginHook(internals._plugins, 'onInit', [storeInstance], storeInstance);
 
   return storeInstance;
+}
+
+/**
+ * Helper to create a typed plugin with sensible defaults
+ */
+export function createPlugin(config: StorePlugin): StorePlugin {
+  return {
+    priority: 10,
+    ...config
+  };
 }

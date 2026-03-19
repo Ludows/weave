@@ -4,7 +4,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStore } from './create-store';
-import { devtools, logger, persist, validate } from './store-plugins';
+import { devtools, getDevtoolsInspector, logger, persist, validate } from './store-plugins';
 
 describe('persist plugin', () => {
   let mockStorage: Storage;
@@ -196,40 +196,241 @@ describe('validate plugin', () => {
 });
 
 describe('devtools plugin', () => {
-  it('should initialize devtools in development', () => {
-    const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
-
-    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-
-    const store = createStore('test', ({ state, use }) => {
-      state({ count: 0 });
-      use(devtools({ name: 'Test Store' }));
-    });
-
-    expect(consoleLogSpy).toHaveBeenCalledWith(
-      '[devtools] Test Store initialized',
-      expect.any(Object)
-    );
-
-    consoleLogSpy.mockRestore();
-    process.env.NODE_ENV = originalEnv;
+  beforeEach(() => {
+    // Reset the inspector
+    if (typeof window !== 'undefined') {
+      (window as any).__WEAVE_DEVTOOLS__ = undefined;
+    }
   });
 
-  it('should not initialize in production', () => {
+  it('should register store in inspector on init', () => {
     const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
-
-    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    process.env.NODE_ENV = 'development';
 
     createStore('test', ({ state, use }) => {
       state({ count: 0 });
       use(devtools({ name: 'Test Store' }));
     });
 
-    expect(consoleLogSpy).not.toHaveBeenCalled();
+    const inspector = getDevtoolsInspector();
+    expect(inspector.stores.has('Test Store')).toBe(true);
+    expect(inspector.getEvents('Test Store').some(e => e.type === 'INIT')).toBe(true);
 
-    consoleLogSpy.mockRestore();
     process.env.NODE_ENV = originalEnv;
+  });
+
+  it('should track state changes in timeline', () => {
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
+
+    const store = createStore('test', ({ state, use }) => {
+      state({ count: 0 });
+      use(devtools({ name: 'Timeline Store' }));
+    });
+
+    store.state.count = 42;
+
+    const inspector = getDevtoolsInspector();
+    const events = inspector.getEvents('Timeline Store');
+    expect(events.some(e => e.type === 'STATE_CHANGE')).toBe(true);
+
+    process.env.NODE_ENV = originalEnv;
+  });
+
+  it('should track actions in timeline', () => {
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
+
+    const store = createStore('test', ({ state, use, action }) => {
+      state({ count: 0 });
+      use(devtools({ name: 'Action Store' }));
+      action('increment', (s) => { s.count++; });
+    });
+
+    store.actions.increment();
+
+    const inspector = getDevtoolsInspector();
+    const events = inspector.getEvents('Action Store');
+    expect(events.some(e => e.type === 'ACTION' && e.payload?.actionName === 'increment')).toBe(true);
+
+    process.env.NODE_ENV = originalEnv;
+  });
+
+  it('should not initialize when disabled', () => {
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+
+    createStore('test', ({ state, use }) => {
+      state({ count: 0 });
+      use(devtools({ name: 'Disabled Store' }));
+    });
+
+    const inspector = getDevtoolsInspector();
+    expect(inspector.stores.has('Disabled Store')).toBe(false);
+
+    process.env.NODE_ENV = originalEnv;
+  });
+
+  it('should remove store on destroy', () => {
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
+
+    const store = createStore('test', ({ state, use }) => {
+      state({ count: 0 });
+      use(devtools({ name: 'Destroy Store' }));
+    });
+
+    const inspector = getDevtoolsInspector();
+    expect(inspector.stores.has('Destroy Store')).toBe(true);
+
+    store.destroy();
+
+    expect(inspector.stores.has('Destroy Store')).toBe(false);
+    expect(inspector.getEvents('Destroy Store').some(e => e.type === 'DESTROY')).toBe(true);
+
+    process.env.NODE_ENV = originalEnv;
+  });
+
+  it('should clear timeline', () => {
+    const originalEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
+
+    createStore('test', ({ state, use }) => {
+      state({ count: 0 });
+      use(devtools({ name: 'Clear Store' }));
+    });
+
+    const inspector = getDevtoolsInspector();
+    expect(inspector.events.length).toBeGreaterThan(0);
+
+    inspector.clear();
+    expect(inspector.events.length).toBe(0);
+
+    process.env.NODE_ENV = originalEnv;
+  });
+});
+
+describe('plugin priority', () => {
+  it('should execute plugins in priority order', () => {
+    const executionOrder: string[] = [];
+
+    createStore('test', ({ state, use }) => {
+      state({ count: 0 });
+      use({
+        name: 'last',
+        priority: 20,
+        onInit: () => { executionOrder.push('last'); }
+      });
+      use({
+        name: 'first',
+        priority: 1,
+        onInit: () => { executionOrder.push('first'); }
+      });
+      use({
+        name: 'middle',
+        priority: 10,
+        onInit: () => { executionOrder.push('middle'); }
+      });
+    });
+
+    expect(executionOrder).toEqual(['first', 'middle', 'last']);
+  });
+});
+
+describe('plugin lifecycle hooks', () => {
+  it('should call onBeforeAction before action execution', () => {
+    const calls: string[] = [];
+
+    const store = createStore('test', ({ state, use, action }) => {
+      state({ count: 0 });
+      use({
+        name: 'tracker',
+        onBeforeAction: (actionName) => { calls.push(`before:${actionName}`); },
+        onActionCall: (actionName) => { calls.push(`action:${actionName}`); }
+      });
+      action('increment', (s) => {
+        calls.push('execute');
+        s.count++;
+      });
+    });
+
+    store.actions.increment();
+
+    expect(calls).toEqual(['before:increment', 'action:increment', 'execute']);
+  });
+
+  it('should call onAfterStateChange after mutation', () => {
+    let afterCalled = false;
+    let afterNewState: any;
+
+    const store = createStore('test', ({ state, use }) => {
+      state({ count: 0 });
+      use({
+        name: 'after-tracker',
+        onAfterStateChange: (newState) => {
+          afterCalled = true;
+          afterNewState = { ...newState as any };
+        }
+      });
+    });
+
+    store.state.count = 99;
+
+    expect(afterCalled).toBe(true);
+    expect(afterNewState.count).toBe(99);
+  });
+
+  it('should call onDestroy when store is destroyed', () => {
+    let destroyed = false;
+
+    const store = createStore('test', ({ state, use }) => {
+      state({ count: 0 });
+      use({
+        name: 'destroy-tracker',
+        onDestroy: () => { destroyed = true; }
+      });
+    });
+
+    store.destroy();
+    expect(destroyed).toBe(true);
+  });
+
+  it('should call onError when a plugin throws', () => {
+    const errors: { error: string; context: string }[] = [];
+
+    const store = createStore('test', ({ state, use }) => {
+      state({ count: 0 });
+      use({
+        name: 'error-reporter',
+        priority: 99,
+        onError: (error, context) => {
+          errors.push({ error: error.message, context });
+        }
+      });
+      use({
+        name: 'buggy',
+        onAfterStateChange: () => { throw new Error('buggy plugin failed'); }
+      });
+    });
+
+    store.state.count = 1;
+
+    expect(errors.length).toBe(1);
+    expect(errors[0]!.error).toBe('buggy plugin failed');
+    expect(errors[0]!.context).toContain('buggy');
+  });
+
+  it('should not call destroy twice', () => {
+    let count = 0;
+
+    const store = createStore('test', ({ state, use }) => {
+      state({ count: 0 });
+      use({ name: 'counter', onDestroy: () => { count++; } });
+    });
+
+    store.destroy();
+    store.destroy();
+
+    expect(count).toBe(1);
   });
 });
