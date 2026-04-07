@@ -1,147 +1,104 @@
 /**
- * promise() fetch integration
+ * promise() fetch integration with reactive refs
  */
 
 import { createReactiveEffect, runEffect } from '../core/dependency-tracker';
+import { ref } from '../reactive/ref';
 import type { PromiseOptions, PromiseResult } from '../types';
 
-// Track all active promises for cleanup
-const activePromises = new WeakMap<any, Set<AbortController>>();
-
 /**
- * Fetch a resource with reactive integration
+ * Fetch a resource and expose reactive loading/data/error refs.
+ *
+ * @example
+ * // Auto-starts immediately
+ * const { data, loading, error, refetch } = promise('/api/users')
+ *
+ * @example
+ * // Lazy — only runs when refetch() is called
+ * const { data, loading, refetch } = promise('/api/users', { enabled: false })
+ *
+ * @example
+ * // Reactive URL — re-fetches when the getter's deps change
+ * const { data } = promise(() => `/api/users/${userId.value}`, { watch: true })
  */
-export function promise<T = any>(
+export function promise<T = unknown>(
   url: string | (() => string),
   options?: PromiseOptions<T>
 ): PromiseResult<T> {
-  const controller = new AbortController();
-  const fetchOptions = { signal: controller.signal };
-  
-  // Resolve URL
-  const resolvedUrl = typeof url === 'function' ? url() : url;
-  
-  // Call onStart if provided
-  if (options?.onStart) {
-    options.onStart();
-  }
-  
-  // Perform fetch
-  const dataPromise = fetch(resolvedUrl, fetchOptions)
-    .then(response => {
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      return response.json() as Promise<T>;
-    })
-    .then(data => {
-      // Call onSuccess if provided
-      if (options?.onSuccess) {
-        options.onSuccess(data);
-      }
-      return data;
-    })
-    .catch(error => {
-      // Don't call onError for aborted requests
-      if (error.name === 'AbortError') {
-        throw error;
-      }
-      
-      // Call onError if provided
-      if (options?.onError) {
-        options.onError(error);
-      }
-      throw error;
-    })
-    .finally(() => {
-      // Call onFinally if provided
-      if (options?.onFinally) {
-        options.onFinally();
-      }
-    });
-  
-  return {
-    data: dataPromise,
-    abort: () => controller.abort()
-  };
-}
+  const data = ref<T | null>(null);
+  const loading = ref(false);
+  const error = ref<Error | null>(null);
 
-/**
- * Create a reactive promise that re-fetches when dependencies change
- */
-export function promiseWithWatch<T = any>(
-  url: () => string,
-  options?: PromiseOptions<T> & { watch?: boolean; debounce?: number },
-  _instanceContext?: any
-): PromiseResult<T> {
-  let currentAbort: (() => void) | null = null;
-  let currentPromise: Promise<T> | null = null;
-  let debounceTimeout: NodeJS.Timeout | null = null;
-  
-  const performFetch = () => {
-    // Abort previous request if exists
-    if (currentAbort) {
-      currentAbort();
-    }
-    
-    // Create new fetch
-    const result = promise<T>(url, options);
-    currentAbort = result.abort;
-    currentPromise = result.data;
-    
-    return result;
+  let currentController: AbortController | null = null;
+  let debounceTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  const isEnabled = (): boolean => {
+    if (options?.enabled === undefined) return true;
+    if (typeof options.enabled === 'function') return options.enabled();
+    return options.enabled;
   };
-  
-  // If watch is enabled, create reactive effect
-  if (options?.watch) {
+
+  const execute = (): void => {
+    if (currentController) {
+      currentController.abort();
+    }
+
+    currentController = new AbortController();
+    const resolvedUrl = typeof url === 'function' ? url() : url;
+
+    loading.value = true;
+    error.value = null;
+
+    if (options?.onStart) options.onStart();
+
+    fetch(resolvedUrl, { signal: currentController.signal })
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        return res.json() as Promise<T>;
+      })
+      .then(result => {
+        data.value = result;
+        if (options?.onSuccess) options.onSuccess(result);
+      })
+      .catch(err => {
+        if ((err as Error).name === 'AbortError') return;
+        error.value = err as Error;
+        if (options?.onError) options.onError(err as Error);
+      })
+      .finally(() => {
+        loading.value = false;
+        currentController = null;
+        if (options?.onFinally) options.onFinally();
+      });
+  };
+
+  const refetch = (): void => execute();
+
+  const abort = (): void => {
+    if (currentController) currentController.abort();
+    if (debounceTimeout) clearTimeout(debounceTimeout);
+  };
+
+  if (options?.watch && typeof url === 'function') {
+    const urlFn = url;
     const effect = createReactiveEffect(() => {
-      // Track URL dependencies
-      url();
-      
-      const executeFetch = () => {
-        performFetch();
-      };
-      
-      // Apply debouncing if specified
+      // Track URL reactive deps and enabled getter
+      urlFn();
+      if (typeof options.enabled === 'function') options.enabled();
+
+      if (!isEnabled()) return;
+
       if (options.debounce && options.debounce > 0) {
-        if (debounceTimeout) {
-          clearTimeout(debounceTimeout);
-        }
-        debounceTimeout = setTimeout(executeFetch, options.debounce);
+        if (debounceTimeout) clearTimeout(debounceTimeout);
+        debounceTimeout = setTimeout(execute, options.debounce);
       } else {
-        executeFetch();
+        execute();
       }
     });
-    
-    // Initial execution
     runEffect(effect);
+  } else if (isEnabled()) {
+    execute();
   }
-  
-  // Initial fetch if not watching
-  if (!options?.watch) {
-    return performFetch();
-  }
-  
-  return {
-    data: currentPromise!,
-    abort: () => {
-      if (currentAbort) {
-        currentAbort();
-      }
-      if (debounceTimeout) {
-        clearTimeout(debounceTimeout);
-      }
-    }
-  };
-}
 
-/**
- * Abort all pending promises for an instance
- */
-export function abortAllPromises(instanceContext: any): void {
-  const controllers = activePromises.get(instanceContext);
-  if (controllers) {
-    controllers.forEach(controller => controller.abort());
-    controllers.clear();
-  }
+  return { data, loading, error, refetch, abort };
 }

@@ -6,7 +6,7 @@ import { createHeadManager, type HeadConfig } from '../advanced/head';
 import { devWarn } from '../utils/dev-mode';
 import { initCloak } from '../dom/cloak';
 import { nextTick as nextTickFn } from '../utils/next-tick';
-import { promise as promiseFn, promiseWithWatch } from '../advanced/promise';
+import { promise as promiseFn } from '../advanced/promise';
 import { createSyncManager, type SyncOptions } from '../advanced/sync';
 import { createEventDelegator, type EventHandler, type Unlisten } from '../dom/event-delegation';
 import { NodeRef } from '../dom/node-ref';
@@ -261,9 +261,6 @@ function createCallbackContext<S = any>(
       return batchFn(fn);
     },
     promise: <T>(url: string | (() => string), options?: any) => {
-      if (typeof url === 'function' && options?.watch) {
-        return promiseWithWatch<T>(url, options, proxyTarget);
-      }
       return promiseFn<T>(url, options);
     },
     store: (storeInstance: any) => {

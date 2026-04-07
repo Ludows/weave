@@ -119,16 +119,27 @@ export interface WatchOptions {
 
 // Promise types
 export interface PromiseOptions<T> {
+  /** If false (or a reactive getter returning false), the fetch does not start automatically */
+  enabled?: boolean | (() => boolean);
   onStart?: () => void;
   onSuccess?: (data: T) => void;
   onError?: (error: Error) => void;
   onFinally?: () => void;
+  /** Re-fetch automatically when the URL reactive getter changes */
   watch?: boolean;
   debounce?: number;
 }
 
 export interface PromiseResult<T> {
-  data: Promise<T>;
+  /** Reactive ref — null until the fetch resolves */
+  data: Ref<T | null>;
+  /** True while a fetch is in flight */
+  loading: Ref<boolean>;
+  /** Populated when the fetch fails, null otherwise */
+  error: Ref<Error | null>;
+  /** Trigger a fresh fetch regardless of the enabled option */
+  refetch: () => void;
+  /** Abort the current in-flight request */
   abort: () => void;
 }
 
